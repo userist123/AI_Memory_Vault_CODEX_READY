@@ -1,6 +1,4 @@
 {
-  "corpus_notes": 850,
-  "storage_notes": 744,
   "arms": {
     "graph_off": {
       "summary": {
@@ -9,8 +7,8 @@
           "n_measurable": 5,
           "n_unmeasurable": 0,
           "candidate_recall": 0.6,
-          "context_recall": 0.2,
-          "answer_correctness": 0.2
+          "context_recall": 0.4,
+          "answer_correctness": 0.4
         },
         "lexical_trap": {
           "n": 4,
@@ -25,8 +23,8 @@
           "n_measurable": 10,
           "n_unmeasurable": 0,
           "candidate_recall": 0.8,
-          "context_recall": 0.1,
-          "answer_correctness": 0.1
+          "context_recall": 0.3,
+          "answer_correctness": 0.3
         },
         "paraphrase": {
           "n": 4,
@@ -41,8 +39,8 @@
           "n_measurable": 4,
           "n_unmeasurable": 0,
           "candidate_recall": 1.0,
-          "context_recall": 0.0,
-          "answer_correctness": 0.0
+          "context_recall": 0.25,
+          "answer_correctness": 0.25
         },
         "unanswerable": {
           "n": 3,
@@ -57,14 +55,11 @@
           "n_measurable": 27,
           "n_unmeasurable": 3,
           "candidate_recall": 0.7407407407407407,
-          "context_recall": 0.14814814814814814,
-          "answer_correctness": 0.14814814814814814
+          "context_recall": 0.2222222222222222,
+          "answer_correctness": 0.2222222222222222
         }
       },
-      "errors": [],
-      "graph_status": {
-        "disabled": 30
-      }
+      "errors": []
     },
     "graph_on": {
       "summary": {
@@ -154,10 +149,7 @@
           "id": "H24",
           "error": "GraphExpansionDegraded: graph expansion reported ok but expanded no nodes; seeds=9, so this arm is identical to the baseline"
         }
-      ],
-      "graph_status": {
-        "ok": 23
-      }
+      ]
     }
   },
   "mcnemar": {
@@ -168,15 +160,15 @@
       "skipped_unmeasurable": 3
     },
     "context_recall": {
-      "off_only": 0,
+      "off_only": 4,
       "on_only": 0,
-      "discordant": 2,
+      "discordant": 4,
       "skipped_unmeasurable": 3
     },
     "answer_correctness": {
-      "off_only": 0,
+      "off_only": 4,
       "on_only": 0,
-      "discordant": 2,
+      "discordant": 4,
       "skipped_unmeasurable": 3
     }
   }
