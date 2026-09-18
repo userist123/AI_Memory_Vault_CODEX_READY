@@ -23,7 +23,7 @@ PART_C_PROPOSALS_PATH = REPO_ROOT / "08_OBSERVABILITY" / "reports" / "edge_propo
 PART_C_SAMPLE_PATH = REPO_ROOT / "08_OBSERVABILITY" / "reports" / "edge_verification_sample_50.json"
 PART_E_TELEMETRY_PATH = REPO_ROOT / "08_OBSERVABILITY" / "reports" / "curriculum_ingestion_telemetry.json"
 PART_E_EVAL_PATH = REPO_ROOT / "08_OBSERVABILITY" / "reports" / "curriculum_heldout_eval.json"
-OUTPUT_REPORT_PATH = REPO_ROOT / "NEURAL_PLASTICITY_REPORT.md"
+OUTPUT_REPORT_PATH = REPO_ROOT / "07_EVALUATION" / "neural_plasticity" / "NEURAL_PLASTICITY_REPORT.md"
 
 
 def fmt_pct(num: float, den: int) -> str:
