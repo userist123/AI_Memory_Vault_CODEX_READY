@@ -618,6 +618,18 @@
       "kind": "no_frontmatter",
       "category": "plain_document",
       "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "category": "plain_document",
+      "path": "00_GOVERNANCE/coordination/projects/AI_MEMORY_VAULT/CONVERSATION_CONTEXT_AND_DECISIONS_V1.md",
+      "reason": "Governance continuity ledger; plain markdown documentation, not a storage-engine memory note.",
+      "kind": "no_frontmatter"
+    },
+    {
+      "category": "plain_document",
+      "path": "00_GOVERNANCE/coordination/projects/AI_MEMORY_VAULT/FULL_FUNCTIONAL_COMPLETION_PROMPT_V1.md",
+      "reason": "Governance completion prompt; plain markdown documentation, not a storage-engine memory note.",
+      "kind": "no_frontmatter"
     }
   ]
 }
