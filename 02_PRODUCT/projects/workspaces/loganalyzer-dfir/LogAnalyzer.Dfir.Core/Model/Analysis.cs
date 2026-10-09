@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace LogAnalyzer.Dfir.Model;
 
 /// <summary>Normalized timeline row (spec §54). Every row points back to its evidence (§70).</summary>
@@ -30,10 +32,21 @@ public sealed class TimelineEvent
     public string Locator { get; init; } = "";
     public Dictionary<string, string> Fields { get; init; } = new(StringComparer.OrdinalIgnoreCase);
     public string Notes { get; set; } = "";
+    /// <summary>Provenance bound by the pipeline after parsing: SHA-256 of the source and the parser that produced the row.</summary>
+    public string SourceSha256 { get; set; } = "";
+    public string ParserId { get; set; } = "";
+    public string ParserVersion { get; set; } = "";
+    /// <summary>What this row is about: an observation, mere presence, execution, configuration (program requirements §5). Set by the pipeline from the source.</summary>
+    public SemanticType SemanticType { get; set; } = SemanticType.Observation;
+    /// <summary>Timezone basis of <see cref="Time"/> where the source says it (e.g. "UTC (native)"); empty = not stated by the source.</summary>
+    public string TimeZoneBasis { get; set; } = "";
+    /// <summary>Known imprecision of the time (aggregate interval, key-level time, ambiguous local time); empty = none known.</summary>
+    public string TimeUncertainty { get; set; } = "";
 }
 
 /// <summary>A pointer from a finding to the exact evidence behind it.</summary>
-public sealed record EvidenceRef(string EvidenceId, string Locator, string Description);
+/// <remarks><see cref="Sha256"/> is the source hash at acquisition, bound by <c>ProvenanceBinder</c>.</remarks>
+public sealed record EvidenceRef(string EvidenceId, string Locator, string Description, string Sha256 = "");
 
 /// <summary>Finding (spec §52). Severity and confidence are deliberately separate.</summary>
 public sealed class Finding
@@ -44,7 +57,7 @@ public sealed class Finding
     public Severity Severity { get; init; }
     public string Category { get; init; } = "";
     public Classification Classification { get; init; }
-    public Confidence Confidence { get; init; }
+    public Confidence Confidence { get; set; }
     public DateTimeOffset? FirstSeenUtc { get; init; }
     public DateTimeOffset? LastSeenUtc { get; init; }
     public string Host { get; init; } = "";
@@ -56,6 +69,8 @@ public sealed class Finding
     public string Domain { get; init; } = "";
     public required string Description { get; init; }
     public List<EvidenceRef> SupportingEvidence { get; init; } = [];
+    /// <summary>Findings this one is built from (an incident chain lists its steps).</summary>
+    public List<string> RelatedFindingIds { get; init; } = [];
     public List<string> ContradictingEvidence { get; init; } = [];
     public List<string> AlternativeExplanations { get; init; } = [];
     public List<string> MissingEvidence { get; init; } = [];
@@ -63,7 +78,52 @@ public sealed class Finding
     public string MitreTechniqueId { get; init; } = "";
     /// <summary>Why this classification was assigned (spec §68).</summary>
     public string ClassificationReason { get; init; } = "";
+
+    // ---- Finding contract (program requirements §19, UX contract §19). Everything below is additive; the fields above are unchanged. ----
+
+    /// <summary>"" = the contract was not applied to this finding (legacy or hand-built); the pipeline applies it to every finding it emits.</summary>
+    public string ContractVersion { get; set; } = "";
+    private SemanticType? _semanticType;
+    /// <summary>What the claim is about. Defaults to the weakest honest value (OBSERVATION) until set.</summary>
+    public SemanticType SemanticType { get => _semanticType ?? SemanticType.Observation; set => _semanticType = value; }
+    [JsonIgnore] public bool HasSemanticType => _semanticType is not null;
+    /// <summary>Standard state (section 20), derived from <see cref="Classification"/> by <c>FindingContract</c>. Default NOT_ASSESSED.</summary>
+    public StandardState Status { get; set; } = StandardState.NotAssessed;
+    public FindingVerification Verification { get; set; } = FindingVerification.NotAssessed();
+    public List<string> Limitations { get; set; } = [];
+    public FindingProvenance? Provenance { get; set; }
+    public List<FindingAuditEntry> AuditTrail { get; set; } = [];
+    /// <summary>Localisation keys (UX contract §19); the Romanian text in Title/Description stays the display fallback.</summary>
+    public string TitleKey { get; set; } = "";
+    public string SummaryKey { get; set; } = "";
+    public string HumanSummary { get; set; } = "";
+    public string TechnicalSummary { get; set; } = "";
+    /// <summary>Air-gap integrity detail (WP14a): channel, authorised?, observed, when, who, object, classification, transfer direction, destination, evidence. Null for every other finding.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public AirGapDetail? AirGap { get; set; }
+    /// <summary>Combined-sequence detail (WP14b): the ordered steps, observed or not, with time, account, object, source and the findings each step comes from. Null for every other finding.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public SequenceDetail? Sequence { get; set; }
+    /// <summary>The contract's Contradictions[] is <see cref="ContradictingEvidence"/> (same list, contract name).</summary>
+    [JsonIgnore] public List<string> Contradictions => ContradictingEvidence;
 }
+
+/// <summary>Whether a channel / destination is approved by the procedure profile (decision 19). Without a profile section it is Undefined, never "authorised".</summary>
+[JsonConverter(typeof(SpecEnumConverter<AirGapAuthorization>))]
+public enum AirGapAuthorization { Authorized, NotAuthorized, Undefined }
+
+/// <summary>
+/// What an AIR-GAP INTEGRITY finding carries (lessons-learned rows 50 and 103): <see cref="Subcategory"/> (one of the 19), the channel, whether the profile
+/// authorises it, what was observed, when, who, the object, the classification (case and register), the transfer direction, the destination and the evidence.
+/// A field the sources do not give says so in words ("necunoscut: ...") instead of being left to look like a "no".
+/// </summary>
+public sealed record AirGapDetail(
+    string Subcategory, string Channel, AirGapAuthorization Authorized, string AuthorizedBasis, string Observed, DateTimeOffset? WhenUtc, string Who,
+    string ObjectName, string CaseClassification, string RegisterClassification, string TransferDirection, string Destination, IReadOnlyList<string> Evidence);
+
+/// <summary>One step of a combined sequence. A step whose source was not collected, or that left no matching record, is <see cref="Observed"/> = false and says so in <see cref="Note"/> ("pas neobservat"); never "absent".</summary>
+public sealed record SequenceStepInfo(int Order, string Name, bool Observed, DateTimeOffset? WhenUtc, string Account, string ObjectName, string Source, IReadOnlyList<string> FindingIds, string Note);
+
+/// <summary>WP14b: what a SEQ-* finding carries: the window used, how the steps are linked (file name proven or only in time), and the ordered steps.</summary>
+public sealed record SequenceDetail(string Window, string Link, IReadOnlyList<SequenceStepInfo> Steps);
 
 /// <summary>Evidence gap (spec §48, §67). "Not available" never means "did not happen".</summary>
 public sealed record EvidenceGap(string Artifact, EvidenceStatus Status, string Reason, string Impact, string AlternativeSource, string Recoverability, string Notes = "");
@@ -74,6 +134,8 @@ public sealed class ParseResult
     public required string EvidenceId { get; init; }
     public required string Parser { get; init; }
     public required string ParserVersion { get; init; }
+    /// <summary>Parser maturity at the time of the run (VALIDATED / TESTED / EXPERIMENTAL), from its descriptor.</summary>
+    public string ParserStatus { get; set; } = "";
     public EvidenceStatus Status { get; set; }
     public string Error { get; set; } = "";
     public int Records { get; set; }
@@ -81,6 +143,13 @@ public sealed class ParseResult
     public List<EvidenceGap> Gaps { get; } = [];
     /// <summary>Case-relative paths of derived files this parser produced (each hashed into custody).</summary>
     public List<string> DerivedOutputs { get; } = [];
+    /// <summary>SHA-256 recorded at acquisition.</summary>
+    public string ExpectedSha256 { get; set; } = "";
+    /// <summary>SHA-256 of the source right before parsing (preflight) and right after; all three must match.</summary>
+    public string SourceSha256Before { get; set; } = "";
+    public string SourceSha256After { get; set; } = "";
+    /// <summary>Format recognised from content (<c>EvidenceFingerprint</c>), e.g. "evtx", "regf", "ese".</summary>
+    public string SourceFingerprint { get; set; } = "";
 
     public ParseResult Finish()
     {

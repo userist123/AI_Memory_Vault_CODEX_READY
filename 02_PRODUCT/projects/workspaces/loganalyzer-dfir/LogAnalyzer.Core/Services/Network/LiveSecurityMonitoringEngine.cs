@@ -1,11 +1,17 @@
 using System;
 using System.Collections.Generic;
 using LogAnalyzer.Core.Models;
+using LogAnalyzer.Dfir.Analysis;
 
 namespace LogAnalyzer.Core.Services.Network
 {
     public class LiveSecurityMonitoringEngine
     {
+        public const string TestAlertTitle = "[TEST — NU ESTE O ALERTĂ REALĂ] Mesaj de test al căii de alertare";
+
+        /// <summary>Approved accounts and maintenance windows from the procedure profile (WP15a); <c>null</c> = no profile, log clears stay NotAssessed.</summary>
+        public LogMaintenancePolicy? MaintenancePolicy { get; set; }
+
         private readonly List<string> _failedLogonHistory = new();
         private DateTime _lastCleanupUtc = DateTime.UtcNow;
 
@@ -123,13 +129,16 @@ namespace LogAnalyzer.Core.Services.Network
             // 6. Curățare Jurnal de Securitate (Anti-Forensics EID 1102 / 104)
             if (ev.EventId == 1102 || ev.EventId == 104 || (msg.Contains("wevtutil") && (msg.Contains("cl") || msg.Contains("clear-log"))))
             {
+                string channel = ev.EventId == 1102 ? "Security" : ev.EventId == 104 ? "System" : "indicat în linia de comandă wevtutil";
+                var (clearUser, clearDomain) = LogClearAssessment.SubjectFromXml(ev.XmlData);
+                var clear = LogClearAssessment.AssessUnscheduled(channel, new DateTimeOffset(ev.TimeCreated.ToUniversalTime()), MaintenancePolicy, clearUser, clearDomain);
                 return new DetectedIssue
                 {
-                    Title = "🚨 ALERTĂ CRITICĂ: Jurnal de Securitate Șters Intenționat (Anti-Forensics)",
-                    Severity = "Critical",
+                    Title = "⚠️ Jurnal de evenimente golit (necesită verificare)",
+                    Severity = clear.Severity.ToString(),
                     MitreTechniqueId = "T1070.001",
                     MitreTacticName = "Defense Evasion",
-                    Explanation = $"Jurnalul Security a fost curățat intenționat (wevtutil cl / Event Log Cleared) pe [{ev.MachineName}]. Tehnică standard de acoperire a urmelor după compromitere.",
+                    Explanation = $"Golire de jurnal ({channel}) (EID {ev.EventId} / wevtutil cl) pe [{ev.MachineName}]. Golirea poate fi mentenanță planificată sau ascundere de urme după compromitere; {clear.Reason}",
                     CreatedAt = DateTime.UtcNow,
                     RelatedEvents = new List<ParsedEvent> { ev }
                 };
@@ -305,26 +314,27 @@ namespace LogAnalyzer.Core.Services.Network
             {
                 return new DetectedIssue
                 {
-                    Title = "🔊 ALERTĂ CRITICĂ: Exfiltrare Acustică prin Modulație Ventilatoare (Air-Gap Jumping / Fansmitter)",
-                    Severity = "Critical",
+                    Title = "[NEVERIFICAT - doar cuvinte cheie] Posibil canal acustic ascuns (Fansmitter)",
+                    Severity = "Low",
                     MitreTechniqueId = "T1048 / T1052 (Air-Gap)",
                     MitreTacticName = "Exfiltration",
-                    Explanation = $"Tentativă de transmitere de date confidențiale din sistem izolat prin vibrații acustice generate de modulația PWM a ventilatoarelor pe [{ev.MachineName}]. Conform normelor HG 585 / NATO TEMPEST.",
+                    Explanation = $"Mesajul de pe [{ev.MachineName}] conține un cuvânt cheie asociat tehnicii Fansmitter. Nu există nicio măsurătoare acustică sau de hardware a ventilatoarelor; aceasta NU este o detecție confirmată de exfiltrare, doar un indiciu de verificat manual.",
                     CreatedAt = DateTime.UtcNow,
                     RelatedEvents = new List<ParsedEvent> { ev }
                 };
             }
 
-            // 18. Comenzi de Test / Simulare
+            // 18. Comenzi de Test / Simulare - synthetic: labelled so it cannot be mistaken for a real detection.
             if (msg.Contains("simulare dfir") || msg.Contains("test alert"))
             {
                 return new DetectedIssue
                 {
-                    Title = "🚨 ALERTĂ LIVE (TEST SIMULAT): Detecție Semnătură Activă",
+                    Title = TestAlertTitle,
                     Severity = "High",
                     MitreTechniqueId = "T1059.001",
                     MitreTacticName = "Execution",
-                    Explanation = $"A fost interceptată o simulare de alertă de securitate live pe [{ev.MachineName}]. Pipeline-ul de detecție și toast pop-up funcționează perfect.",
+                    Explanation = $"ALERTĂ DE TEST, NU O DETECȚIE REALĂ. Mesajul de test primit de pe [{ev.MachineName}] a declanșat calea de alertare; nu indică vreo activitate malițioasă.",
+                    IsTestAlert = true,
                     CreatedAt = DateTime.UtcNow,
                     RelatedEvents = new List<ParsedEvent> { ev }
                 };

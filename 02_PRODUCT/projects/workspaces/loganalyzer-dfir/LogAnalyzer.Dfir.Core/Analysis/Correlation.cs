@@ -1,4 +1,6 @@
+using LogAnalyzer.Dfir.FileSystem;
 using LogAnalyzer.Dfir.Model;
+using LogAnalyzer.Dfir.Profile;
 
 namespace LogAnalyzer.Dfir.Analysis;
 
@@ -13,7 +15,7 @@ public static class Correlation
         [@"\programdata\", @"\appdata\", @"\temp\", @"\downloads\", @"\users\public\", @"\windows\temp\", @"\$recycle.bin\"];
 
     /// <summary>Signed Microsoft binaries frequently used to run attacker code or move data ("living off the land").</summary>
-    private static readonly HashSet<string> Lolbins = new(StringComparer.OrdinalIgnoreCase)
+    internal static readonly HashSet<string> Lolbins = new(StringComparer.OrdinalIgnoreCase)
     {
         "msbuild.exe", "regsvr32.exe", "rundll32.exe", "mshta.exe", "installutil.exe", "regasm.exe", "regsvcs.exe", "cmstp.exe",
         "wscript.exe", "cscript.exe", "certutil.exe", "bitsadmin.exe", "msiexec.exe", "powershell.exe", "pwsh.exe", "wmic.exe",
@@ -26,13 +28,22 @@ public static class Correlation
     private static readonly string[] KnownBenignMarkers =
         [@"\programdata\microsoft\", @"\programdata\package cache\", "__psscriptpolicytest_", @"\appdata\local\microsoft\windowsapps\"];
 
+    /// <summary>Environment variables in task/service commands that resolve to user-writable folders (not expanded on this machine).</summary>
+    private static readonly (string Var, string Folder)[] WritableEnvVars =
+        // No trailing separator: the variable is followed by its own "\" in the path ("%ProgramData%\Microsoft").
+        [("%localappdata%", @"\appdata\local"), ("%appdata%", @"\appdata\roaming"), ("%temp%", @"\temp"), ("%tmp%", @"\temp"),
+         ("%programdata%", @"\programdata"), ("%public%", @"\users\public"), ("%allusersprofile%", @"\programdata")];
+
     public static bool IsUserWritable(string path)
     {
         var p = path.Replace('/', '\\').ToLowerInvariant();
+        foreach (var (v, folder) in WritableEnvVars) p = p.Replace(v, folder);
         return UserWritableMarkers.Any(p.Contains) && !KnownBenignMarkers.Any(p.Contains);
     }
 
-    public static List<Finding> Run(IReadOnlyList<TimelineEvent> events)
+    /// <param name="maintenancePolicy">Approved log-clearing accounts and maintenance windows from the procedure profile; <c>null</c> = not defined yet.</param>
+    /// <param name="profile">The procedure profile (approved software, ...) for the WP11 rules; <c>null</c> = none, nothing is approved.</param>
+    public static List<Finding> Run(IReadOnlyList<TimelineEvent> events, LogMaintenancePolicy? maintenancePolicy = null, ProcedureProfile? profile = null)
     {
         var f = new List<Finding>();
         int n = 0;
@@ -51,7 +62,7 @@ public static class Correlation
             f.Add(new Finding
             {
                 FindingId = Id(), RuleId = "DEF-DETECTION",
-                Title = $"Microsoft Defender a detectat {(threats.Count == 1 ? threats[0] : $"{threats.Count} amenințări")} în {Path.GetFileName(g.Key.TrimEnd('\\'))}",
+                Title = $"Microsoft Defender a detectat {(threats.Count == 1 ? threats[0] : $"{threats.Count} amenințări")} în {WinPath.GetFileName(g.Key.TrimEnd('\\'))}",
                 Severity = Severity.High, Category = "Execution", Classification = Classification.Direct, Confidence = Confidence.High,
                 FirstSeenUtc = g.Min(e => e.Time.Utc), LastSeenUtc = g.Max(e => e.Time.Utc), File = g.Key, User = F(first, "Detection User"),
                 Description = $"{g.Count()} evenimente Defender pentru {g.Key}: {string.Join(", ", threats.Take(15))}. Acțiuni: {string.Join(", ", g.Select(e => F(e, "Action Name")).Where(a => a.Length > 0).Distinct())}.",
@@ -76,19 +87,10 @@ public static class Correlation
 
         // 2. Log tampering: cleared logs and record-id gaps (ported from the 2026-08-08 prototype's LogIntegrityService).
         var clears = events.Where(e => Ev(e, "Security", 1102) || Ev(e, "System", 104) || Ev(e, "Security", 1100) || Ev(e, "Security", 4719)).ToList();
-        if (clears.Count > 0)
-            f.Add(new Finding
-            {
-                FindingId = Id(), RuleId = "LOG-TAMPER", Title = "Jurnale șterse, serviciul de jurnalizare oprit sau politica de audit modificată",
-                Severity = clears.Any(e => e.EventId is "1102" or "104") ? Severity.High : Severity.Medium, Category = "Defense Evasion",
-                Classification = Classification.Direct, Confidence = Confidence.High, MitreTechniqueId = "T1070.001",
-                FirstSeenUtc = clears.Min(e => e.Time.Utc), LastSeenUtc = clears.Max(e => e.Time.Utc),
-                Description = string.Join("; ", clears.OrderBy(e => e.Time.Utc).Take(15).Select(e =>
-                    $"{e.Time.Utc:yyyy-MM-dd HH:mm} {e.Source[9..]} {e.EventId} {(e.EventId == "1102" ? "de " + F(e, "SubjectUserName") : F(e, "Channel"))}")),
-                ClassificationReason = "Evenimente 1102/104/1100/4719 înregistrate de Windows.",
-                SupportingEvidence = clears.Take(30).Select(e => Ref(e, $"{e.Source} {e.EventId}")).ToList(),
-                MissingEvidence = ["Activitatea anterioară ștergerii nu mai este în jurnal; surse alternative: SRUM, Prefetch, Amcache, copii VSS."],
-            });
+        // The severity of a cleared log depends on other findings (a clear next to a High finding is worse), so the finding is
+        // built after sections 1-7 have run (see below); its id is reserved here to keep the numbering stable.
+        var logTamperId = clears.Count > 0 ? Id() : "";
+
         foreach (var g in events.Where(e => e.Source.StartsWith("EventLog:", StringComparison.Ordinal) && e.Locator.StartsWith("EventRecordID=", StringComparison.Ordinal))
                                 .GroupBy(e => e.EvidenceId))
         {
@@ -142,6 +144,99 @@ public static class Correlation
                 SupportingEvidence = [Ref(e, "creare task")],
             });
 
+        // Task definitions (System32\Tasks XML): configuration that runs a program from a user-writable location.
+        foreach (var e in events.Where(e => e.Source == "ScheduledTask" && e.Path.Length > 0 &&
+                                            (IsUserWritable(e.Path) || ScriptExtensions.Any(x => F(e, "Arguments").Contains(x, StringComparison.OrdinalIgnoreCase) && IsUserWritable(F(e, "Arguments"))))))
+        {
+            bool hidden = F(e, "Hidden") == "true";
+            f.Add(new Finding
+            {
+                FindingId = Id(), RuleId = "PERSIST-TASK-CONFIG", Title = $"Task programat{(hidden ? " ascuns" : "")} care rulează din locație scriabilă: {e.Task}",
+                Severity = hidden ? Severity.High : Severity.Medium, Category = "Persistence", Classification = Classification.Direct, Confidence = Confidence.High,
+                MitreTechniqueId = "T1053.005", FirstSeenUtc = e.Time.Utc, File = e.Path, Process = e.Process, User = e.User,
+                Description = $"{e.Task} rulează {F(e, "Command")} {F(e, "Arguments")} ca {e.User} ({F(e, "RunLevel")}); declanșatori: {F(e, "Triggers")}; autor {F(e, "Author")}.",
+                ClassificationReason = "Definiția taskului (XML din System32\\Tasks) indică o cale scriabilă de utilizatori. Arată configurația, nu o rulare.",
+                SupportingEvidence = [Ref(e, "definiție task")],
+                AlternativeExplanations = ["Actualizatoare legitime instalate per utilizator (AppData) creează astfel de taskuri."],
+                MissingEvidence = ["Rulări ale taskului: TaskScheduler/Operational (200/201) sau Prefetch pentru executabil."],
+                ContradictingEvidence = F(e, "Enabled") == "false" ? ["Taskul este dezactivat (Settings/Enabled=false): în această stare nu pornește singur."] : [],
+            });
+        }
+
+        // Services and drivers configured in the SYSTEM hive whose binary or ServiceDll is in a user-writable location.
+        foreach (var e in events.Where(e => e.Source == "Service" && (IsUserWritable(e.Path) || IsUserWritable(F(e, "ServiceDll")))))
+        {
+            var file = IsUserWritable(F(e, "ServiceDll")) ? F(e, "ServiceDll") : e.Path;
+            f.Add(new Finding
+            {
+                FindingId = Id(), RuleId = "PERSIST-SERVICE-CONFIG", Title = $"Serviciu configurat din locație scriabilă: {e.Service}",
+                Severity = Severity.High, Category = "Persistence", Classification = Classification.Direct, Confidence = Confidence.High,
+                MitreTechniqueId = "T1543.003", FirstSeenUtc = e.Time.Utc, File = file, User = e.User,
+                Description = $"{e.Service} ({F(e, "ServiceType")}, {F(e, "StartMode")}) rulează {F(e, "ImagePath")}" +
+                              (F(e, "ServiceDll").Length > 0 ? $" cu ServiceDll {F(e, "ServiceDll")}" : "") + $" ca {e.User}.",
+                ClassificationReason = "Configurația serviciului din hive-ul SYSTEM indică o cale scriabilă de utilizatori. Arată configurația, nu o rulare.",
+                SupportingEvidence = [Ref(e, "configurație serviciu")],
+                AlternativeExplanations = ["Unele produse legitime își instalează serviciul în ProgramData."],
+                MissingEvidence = ["Instalarea (System 7045) și pornirile (7036), semnătura binarului."],
+                ContradictingEvidence = F(e, "StartMode").Equals("Disabled", StringComparison.OrdinalIgnoreCase)
+                    ? ["Serviciul este dezactivat (Start=4): în această stare nu pornește singur."] : [],
+            });
+        }
+
+        // Firewall rules that allow a program from a user-writable folder (Firewall.evtx 2004/2005 older, 2097/2099 Windows 11).
+        // Codes checked on real events: Action 3 = Allow, 2 = Block; Direction 1 = Inbound, 2 = Outbound.
+        foreach (var e in events.Where(e => Ev(e, "Microsoft-Windows-Windows Firewall With Advanced Security/Firewall", 2004, 2005, 2097, 2099)
+                                            && F(e, "Action") == "3" && IsUserWritable(F(e, "ApplicationPath"))))
+        {
+            bool inbound = F(e, "Direction") == "1";
+            f.Add(new Finding
+            {
+                FindingId = Id(), RuleId = "FIREWALL-RULE-USERPATH",
+                Title = $"Regulă de firewall care permite {(inbound ? "intrarea" : "ieșirea")} pentru un program din locație scriabilă: {WinPath.GetFileName(F(e, "ApplicationPath"))}",
+                Severity = inbound ? Severity.High : Severity.Medium, Category = "DefenseEvasion", Classification = Classification.Direct, Confidence = Confidence.High,
+                MitreTechniqueId = "T1562.004", FirstSeenUtc = e.Time.Utc, File = F(e, "ApplicationPath"), User = F(e, "ModifyingUser"),
+                Description = $"Regula „{F(e, "RuleName")}” ({(inbound ? "Inbound" : "Outbound")}, Allow) pentru {F(e, "ApplicationPath")}, adăugată/modificată de {F(e, "ModifyingApplication")}.",
+                ClassificationReason = "Evenimentul de firewall arată o regulă de tip Allow pentru o cale scriabilă de utilizatori.",
+                SupportingEvidence = [Ref(e, "regulă firewall")],
+                AlternativeExplanations = ["Aplicații per utilizator (de ex. jocuri, clienți de chat) își adaugă reguli la instalare."],
+            });
+        }
+
+        // Registry autostarts (Run/RunOnce, Winlogon, IFEO) from saved hives.
+        foreach (var e in events.Where(e => e.Source == "RunKey" && IsUserWritable(e.Path)))
+            f.Add(new Finding
+            {
+                FindingId = Id(), RuleId = "PERSIST-RUNKEY-USERPATH", Title = $"Pornire automată din locație scriabilă: {F(e, "ValueName")}",
+                Severity = Severity.Medium, Category = "Persistence", Classification = Classification.Direct, Confidence = Confidence.High,
+                MitreTechniqueId = "T1547.001", FirstSeenUtc = e.Time.Utc, File = e.Path, Process = e.Process,
+                Description = $"{F(e, "Hive")}\\{F(e, "Key")}: {F(e, "ValueName")} = {F(e, "Command")}",
+                ClassificationReason = "Valoarea din cheia Run/RunOnce indică o cale scriabilă de utilizatori. Ora este LastWriteTime al cheii.",
+                SupportingEvidence = [Ref(e, "valoare Run")],
+                AlternativeExplanations = ["Multe aplicații per utilizator (actualizatoare, sincronizare) pornesc legitim din AppData."],
+            });
+        foreach (var e in events.Where(e => e.Source == "IFEO"))
+            f.Add(new Finding
+            {
+                FindingId = Id(), RuleId = "PERSIST-IFEO-DEBUGGER", Title = $"Image File Execution Options: {F(e, "Target")} este înlocuit de {e.Process}",
+                Severity = Severity.High, Category = "Persistence", Classification = Classification.Direct, Confidence = Confidence.High,
+                MitreTechniqueId = "T1546.012", FirstSeenUtc = e.Time.Utc, File = e.Path, Process = e.Process,
+                Description = $"La pornirea {F(e, "Target")} Windows rulează {F(e, "Command")}.",
+                ClassificationReason = "Valoarea Debugger din IFEO redirecționează pornirea programului țintă.",
+                SupportingEvidence = [Ref(e, "IFEO Debugger")],
+                AlternativeExplanations = ["Depanatoare instalate intenționat de dezvoltatori (de ex. vsjitdebugger.exe)."],
+            });
+        foreach (var e in events.Where(e => e.Source == "Winlogon" && F(e, "NonDefault") == "true"))
+            f.Add(new Finding
+            {
+                FindingId = Id(), RuleId = "PERSIST-WINLOGON", Title = $"Winlogon {F(e, "ValueName")} diferit de valoarea implicită",
+                Severity = Severity.High, Category = "Persistence", Classification = Classification.Direct, Confidence = Confidence.High,
+                MitreTechniqueId = "T1547.004", FirstSeenUtc = e.Time.Utc, File = e.Path,
+                Description = $"{F(e, "ValueName")} = {F(e, "Command")}",
+                ClassificationReason = "Shell diferit de explorer.exe sau Userinit cu alte programe decât userinit.exe.",
+                SupportingEvidence = [Ref(e, "Winlogon")],
+                AlternativeExplanations = ["Medii kiosk sau shell-uri înlocuite intenționat de administrator."],
+            });
+
         // 4. Execution from user-writable locations (Prefetch references), scripts launched by installers.
         var userPathExec = new List<Finding>();
         foreach (var e in events.Where(e => e.Source == "Prefetch").GroupBy(e => e.Fields.GetValueOrDefault("PrefetchHash") + e.Process).Select(g => g.OrderByDescending(x => x.Time.Utc).First()))
@@ -155,7 +250,7 @@ public static class Correlation
                     Severity = Severity.Medium, Category = "Execution", Classification = Classification.Direct, Confidence = Confidence.High,
                     LastSeenUtc = e.Time.Utc, File = exePath, Process = e.Process,
                     Description = $"{exePath} a rulat de {F(e, "RunCount")} ori; ultima rulare {e.Time.Utc:yyyy-MM-dd HH:mm} UTC.",
-                    ClassificationReason = "Fișierul Prefetch al programului (execuție dovedită).",
+                    ClassificationReason = "Fișierul Prefetch al programului (execuție dovedită).", SemanticType = SemanticType.Execution,
                     SupportingEvidence = [Ref(e, "Prefetch")],
                     AlternativeExplanations = ["Instalator sau aplicație legitimă instalată per utilizator."],
                 });
@@ -172,12 +267,29 @@ public static class Correlation
                 });
         }
 
+        // 4b. BAM (execution) and Amcache (presence) from user-writable locations, one entry per path.
+        foreach (var e in events.Where(e => e.Source is "BAM" or "Amcache" && IsUserWritable(e.Path))
+                                .GroupBy(e => (e.Source, e.Path.ToLowerInvariant())).Select(g => g.OrderByDescending(x => x.Time.Utc).First()))
+            userPathExec.Add(new Finding
+            {
+                FindingId = "", RuleId = "EXEC-USERPATH", Title = $"{(e.Source == "BAM" ? "Program rulat" : "Program prezent")} dintr-o locație scriabilă: {e.Process}",
+                Severity = Severity.Medium, Category = "Execution", Classification = Classification.Direct,
+                Confidence = e.Source == "BAM" ? Confidence.High : Confidence.Medium, LastSeenUtc = e.Time.Utc, File = e.Path, Process = e.Process, User = e.User,
+                Description = e.Source == "BAM"
+                    ? $"{e.Path}: ultima rulare {e.Time.Utc:yyyy-MM-dd HH:mm} UTC (BAM, utilizator {e.User})."
+                    : $"{e.Path}: prezent în Amcache (SHA-1 {e.Hash}, {F(e, "Publisher")} {F(e, "Version")}), intrare scrisă {e.Time.Utc:yyyy-MM-dd HH:mm} UTC.",
+                ClassificationReason = e.Source == "BAM" ? "BAM înregistrează ultima execuție per utilizator." : "Amcache înregistrează prezența/instalarea programului.",
+                SemanticType = AntiOverclaim.SemanticForArtifact(e.Source),
+                SupportingEvidence = [Ref(e, e.Source)],
+                AlternativeExplanations = ["Instalator sau aplicație legitimă instalată per utilizator."],
+            });
+
         // 5. Network: LOLBins with real traffic (SRUM), upload-heavy applications.
         var srum = events.Where(e => e.Source == "SRUM").ToList();
         foreach (var g in srum.GroupBy(e => e.Path, StringComparer.OrdinalIgnoreCase))
         {
             long sent = g.Sum(e => long.TryParse(F(e, "BytesSent"), out var s) ? s : 0), recv = g.Sum(e => long.TryParse(F(e, "BytesRecvd"), out var r) ? r : 0);
-            var exe = Path.GetFileName(g.Key.TrimEnd('\\'));
+            var exe = WinPath.GetFileName(g.Key.TrimEnd('\\'));
             if (Lolbins.Contains(exe) && sent + recv > 1_000_000 && !exe.Equals("powershell.exe", StringComparison.OrdinalIgnoreCase) || IsUserWritable(g.Key) && sent > 5_000_000)
             {
                 var prefetch = events.Where(e => e.Source == "Prefetch" && e.Process.Equals(exe, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -243,13 +355,24 @@ public static class Correlation
                 AlternativeExplanations = ["Scripturi de administrare sau de instalare legitime."],
             });
 
+        // 7b. WP11 Tier 1: SMB shares, account lifecycle, remote administration, security agents, snapshot deletion, DNS, remote-access tools.
+        f.AddRange(Wp11Rules.Run(events, f.ToList(), Id, profile));
+
+        if (clears.Count > 0)
+        {
+            // System 1074 / 6006 / 6005 pair a Security 1100 with an ordinary shutdown or restart (owner decision 27).
+            var systemEvents = events.Where(e => e.Time.Utc is not null && e.EventId is "1074" or "6006" or "6005" && e.Source.Equals("EventLog:System", StringComparison.OrdinalIgnoreCase))
+                                     .Select(e => new SystemLifecycleEvent(e.Time.Utc!.Value, "System", int.Parse(e.EventId))).ToList();
+            f.Add(BuildLogTamper(logTamperId, clears, f, maintenancePolicy, systemEvents, F));
+        }
+
         // 8. Executions from user-writable locations: individual findings only when another signal touches them.
         static DateTimeOffset? T(Finding x) => x.FirstSeenUtc ?? x.LastSeenUtc;
         var strong = f.Where(x => x.Severity >= Severity.High && T(x) is not null).ToList();
         var correlated = new HashSet<Finding>();
         foreach (var x in userPathExec)
         {
-            var dir = Path.GetDirectoryName(Normalize(x.File)) ?? "";
+            var dir = WinPath.GetDirectoryName(Normalize(x.File)) ?? "";
             var touching = strong.Where(s =>
                 (s.File.Length > 0 && dir.Length > 3 && Normalize(s.File).StartsWith(dir, StringComparison.OrdinalIgnoreCase)) ||
                 (s.Process.Length > 0 && s.Process.Equals(x.Process, StringComparison.OrdinalIgnoreCase)) ||
@@ -272,13 +395,55 @@ public static class Correlation
         if (rest.Count > 0)
             f.Add(new Finding
             {
-                FindingId = Id(), RuleId = "EXEC-USERPATH", Title = $"{rest.Count} programe au rulat din locații scriabile (fără alte semnale)",
+                FindingId = Id(), RuleId = "EXEC-USERPATH",
+                SemanticType = rest.All(x => x.SemanticType == SemanticType.Execution) ? SemanticType.Execution : SemanticType.Presence,
+                Title = rest.All(x => x.SemanticType == SemanticType.Execution)
+                    ? $"{rest.Count} programe au rulat din locații scriabile (fără alte semnale)"
+                    : $"{rest.Count} programe au rulat sau sunt doar prezente în locații scriabile (fără alte semnale)",
                 Severity = Severity.Low, Category = "Execution", Classification = Classification.Candidate, Confidence = Confidence.Low,
                 FirstSeenUtc = rest.Min(T), LastSeenUtc = rest.Max(T),
                 Description = string.Join("; ", rest.OrderByDescending(T).Take(60).Select(x => $"{x.Process} ({T(x):yyyy-MM-dd HH:mm})")),
                 ClassificationReason = "Execuții dovedite de Prefetch; în sine frecvente pentru instalatoare și aplicații per utilizator.",
                 SupportingEvidence = rest.SelectMany(x => x.SupportingEvidence).Take(60).ToList(),
             });
+
+        // Initial access: a browser download followed, within 6 hours, by a program run from the same folder (or below it).
+        var execs = events.Where(e => e.Source is "Prefetch" or "BAM" or "UserAssist" && e.Time.Utc is not null).Select(e =>
+        {
+            var path = e.Source == "Prefetch"
+                ? F(e, "ReferencedFiles").Split('|').FirstOrDefault(r => r.EndsWith("\\" + e.Process, StringComparison.OrdinalIgnoreCase)) ?? e.Path
+                : e.Path;
+            return (Event: e, Path: Normalize(path));
+        }).Where(x => x.Path.Length > 0).ToList();
+        foreach (var d in events.Where(e => e.Source == "BrowserDownload" && e.Path.Length > 0 && e.Time.Utc is not null))
+        {
+            var dir = Normalize(WinPath.GetDirectoryName(d.Path) ?? "");
+            if (dir.Length < 4) continue;
+            var start = d.Time.Utc!.Value;
+            var hits = execs.Where(x => x.Path.StartsWith(dir + "\\", StringComparison.Ordinal) && x.Event.Time.Utc >= start && x.Event.Time.Utc <= start.AddHours(6))
+                            .OrderBy(x => x.Event.Time.Utc).ToList();
+            if (hits.Count == 0) continue;
+            // A distinctive number from the downloaded file's name (5+ digits) found in the program's path ties them closely.
+            var tokens = System.Text.RegularExpressions.Regex.Matches(WinPath.GetFileNameWithoutExtension(d.Path), @"\d{5,}").Select(m => m.Value).ToList();
+            bool tied = hits.Any(h => tokens.Any(t => h.Path.Contains(t, StringComparison.Ordinal)));
+            var first = hits[0].Event;
+            f.Add(new Finding
+            {
+                FindingId = Id(), RuleId = "DOWNLOAD-THEN-EXEC",
+                Title = $"Descărcare urmată de rularea unui program din același folder: {WinPath.GetFileName(d.Path)} → {first.Process}",
+                Severity = tied ? Severity.High : Severity.Medium, Category = "InitialAccess", Classification = Classification.Correlated,
+                Confidence = tied ? Confidence.High : Confidence.Medium, MitreTechniqueId = "T1204.002",
+                FirstSeenUtc = start, LastSeenUtc = first.Time.Utc, File = d.Path, Process = first.Process, Domain = d.Dns,
+                Description = $"{d.Path} descărcat la {start:yyyy-MM-dd HH:mm:ss} UTC din {F(d, "TabUrl")} (lanț: {Trunc(F(d, "UrlChain"), 200)}); " +
+                              $"apoi {string.Join(", ", hits.Take(5).Select(h => $"{h.Event.Process} ({h.Event.Source}, {h.Event.Time.Utc:HH:mm:ss})"))}.",
+                ClassificationReason = tied
+                    ? "Programul rulează din folderul descărcării, în următoarele 6 ore, iar calea lui conține numărul din numele fișierului descărcat."
+                    : "Programul rulează din folderul descărcării, în următoarele 6 ore.",
+                SupportingEvidence = [Ref(d, "descărcare"), .. hits.Take(3).Select(h => Ref(h.Event, h.Event.Source))],
+                AlternativeExplanations = ["Utilizatorul a rulat alt program din folderul Downloads, fără legătură cu descărcarea."],
+                MissingEvidence = ["Zone.Identifier (Mark-of-the-Web) al fișierului extras; jurnalul de extragere al arhivei."],
+            });
+        }
 
         // 9. Incident chain: serious findings close in time are presented as one ordered story.
         var timed = f.Where(x => x.Severity >= Severity.High && T(x) is not null && x.RuleId != "DEF-TAMPER").OrderBy(T).ToList();
@@ -297,6 +462,7 @@ public static class Correlation
                     Description = string.Join(" → ", cluster.Select(c => $"[{T(c):HH:mm}] {c.Title}")),
                     ClassificationReason = "Constatări din surse diferite (Prefetch, SRUM, Defender, jurnale) concentrate în aceeași fereastră de timp.",
                     SupportingEvidence = cluster.SelectMany(c => c.SupportingEvidence.Take(3)).ToList(),
+                    RelatedFindingIds = cluster.Select(c => c.FindingId).ToList(),
                     AlternativeExplanations = ["Coincidență temporală a unor activități fără legătură; verificați fiecare pas."],
                     RecommendedNextSteps = ["Reconstituiți fiecare pas din probele indicate.", "Stabiliți ce date au părăsit stația în fereastra lanțului."],
                 });
@@ -312,8 +478,43 @@ public static class Correlation
         return f.OrderByDescending(x => x.Severity).ThenBy(x => x.FirstSeenUtc ?? x.LastSeenUtc).ToList();
     }
 
+    /// <summary>
+    /// LOG-TAMPER. Clears (Security 1102 / System 104) are scored by <see cref="LogClearAssessment"/>: planned maintenance is Info,
+    /// an unexplained clear without a procedure profile is Medium, an unexpected or corroborated one is High, never Critical.
+    /// Service stop (1100) and audit-policy change (4719) follow the same lifecycle (owner decision 27): a stop during a shutdown/restart
+    /// or a Group Policy audit change is Info, a removal of success/failure auditing that is not routine is High.
+    /// </summary>
+    private static Finding BuildLogTamper(string id, List<TimelineEvent> clears, List<Finding> found, LogMaintenancePolicy? policy, IReadOnlyList<SystemLifecycleEvent> systemEvents, Func<TimelineEvent, string, string> F)
+    {
+        var logClears = clears.Where(e => e.EventId is "1102" or "104").Where(e => e.Time.Utc is not null).OrderBy(e => e.Time.Utc).ToList();
+        var others = found.Where(x => x.Severity >= Severity.High && (x.FirstSeenUtc ?? x.LastSeenUtc) is not null).Select(x => (x.FirstSeenUtc ?? x.LastSeenUtc)!.Value).ToList();
+        var assessed = LogClearAssessment.Assess(
+            logClears.Select(e => new LogClearEvent(e.EventId == "1102" ? "Security" : F(e, "Channel") is { Length: > 0 } ch ? ch : "System",
+                e.Time.Utc!.Value, F(e, "SubjectUserName"), F(e, "SubjectDomainName"))).ToList(), policy, others).ToList();
+        foreach (var e in clears.Where(e => e.EventId == "1100" && e.Time.Utc is not null).OrderBy(e => e.Time.Utc))
+            assessed.Add(LogClearAssessment.AssessServiceStop(new ServiceStopEvent(e.Time.Utc!.Value, F(e, "SubjectUserName"), F(e, "SubjectDomainName")), policy, systemEvents));
+        foreach (var e in clears.Where(e => e.EventId == "4719" && e.Time.Utc is not null).OrderBy(e => e.Time.Utc))
+            assessed.Add(LogClearAssessment.AssessAuditPolicyChange(new AuditPolicyChangeEvent(e.Time.Utc!.Value, F(e, "SubjectUserName"), F(e, "SubjectDomainName"), F(e, "SubjectUserSid"), F(e, "AuditPolicyChanges")), policy));
+        var severity = assessed.Count > 0 ? LogClearAssessment.Overall(assessed) : Severity.Medium;
+        var lines = clears.OrderBy(e => e.Time.Utc).Take(15).Select(e =>
+            $"{e.Time.Utc:yyyy-MM-dd HH:mm} {e.Source[9..]} {e.EventId} {(e.EventId == "1102" ? "de " + F(e, "SubjectUserName") : F(e, "Channel"))}").ToList();
+        var verdict = assessed.Select(a => a.Reason).Distinct().ToList();
+        return new Finding
+        {
+            FindingId = id, RuleId = "LOG-TAMPER", Title = "Jurnale șterse, serviciul de jurnalizare oprit sau politica de audit modificată",
+            Severity = severity, Category = "Defense Evasion",
+            Classification = Classification.Direct, Confidence = Confidence.High, MitreTechniqueId = "T1070.001",
+            FirstSeenUtc = clears.Min(e => e.Time.Utc), LastSeenUtc = clears.Max(e => e.Time.Utc),
+            Description = string.Join("; ", lines) + (verdict.Count > 0 ? ". Evaluare: " + string.Join(" ", verdict.Take(5)) : ""),
+            ClassificationReason = "Evenimente 1102/104/1100/4719 înregistrate de Windows. Severitatea ține de ciclul de viață al golirii (planificată / neașteptată / neevaluată) și de factori de corelare, nu de ora din zi.",
+            SupportingEvidence = clears.Take(30).Select(e => new EvidenceRef(e.EvidenceId, e.Locator, $"{e.Source} {e.EventId}")).ToList(),
+            MissingEvidence = ["Activitatea anterioară ștergerii nu mai este în jurnal; surse alternative: SRUM, Prefetch, Amcache, copii VSS."],
+            AlternativeExplanations = ["Mentenanță planificată (rotirea jurnalelor, curățare după instalare) făcută de un administrator."],
+        };
+    }
+
     /// <summary>"containerfile:_C:\x.zip; file:_C:\x.zip->inner" → "C:\x.zip".</summary>
-    private static string DefenderContainer(string path)
+    public static string DefenderContainer(string path)
     {
         // Behaviour detections list "process:_pid:…" before the file: prefer the container, then the file segment.
         var parts = path.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
@@ -327,7 +528,7 @@ public static class Correlation
     }
 
     /// <summary>Prefetch paths start with \VOLUME{guid}\; compare on the part after the volume.</summary>
-    private static string Normalize(string path)
+    public static string Normalize(string path)
     {
         var p = path.Replace('/', '\\');
         if (p.StartsWith("\\VOLUME{", StringComparison.OrdinalIgnoreCase)) { var i = p.IndexOf('}'); if (i > 0) p = p[(i + 1)..]; }

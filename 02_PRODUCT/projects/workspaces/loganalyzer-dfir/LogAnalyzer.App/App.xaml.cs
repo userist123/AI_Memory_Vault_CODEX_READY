@@ -31,8 +31,28 @@ namespace LogAnalyzer.UI
 
         public static IServiceProvider? ServiceProvider { get; private set; }
 
+        /// <summary>First run creates the primary administrator; after an offline password recovery a new password is set; otherwise the normal sign-in.</summary>
+        private static bool SignInBeforeMainWindow(string debugLogPath)
+        {
+            var mode = AuthApp.Service.SetupState switch
+            {
+                LogAnalyzer.Dfir.Auth.AuthSetupState.FirstRun => SignInWindowMode.FirstRun,
+                LogAnalyzer.Dfir.Auth.AuthSetupState.PasswordRecovery => SignInWindowMode.Recovery,
+                _ => SignInWindowMode.SignIn,
+            };
+            File.AppendAllText(debugLogPath, $"Auth setup state: {AuthApp.Service.SetupState}\n");
+            var window = new SignInWindow(mode);
+            if (window.ShowDialog() != true || window.Session is null) return false;
+            AuthApp.SetSession(window.Session);
+            return true;
+        }
+
         protected override void OnStartup(StartupEventArgs e)
         {
+            // `--self-test`: prove the published executable runs on a bare machine, then exit without opening any window.
+            if (LogAnalyzer.Dfir.Windows.Investigation.SelfTest.IsRequested(e.Args))
+                Environment.Exit(LogAnalyzer.Dfir.Windows.Investigation.SelfTest.Execute(e.Args, AppContext.BaseDirectory));
+
             string debugLogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "startup_debug.log");
             string crashLogPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "startup_crash.log");
 
@@ -41,11 +61,11 @@ namespace LogAnalyzer.UI
             {
                 File.WriteAllText(debugLogPath, "OnStartup starting...\n");
                 base.OnStartup(e);
+                LogAnalyzer.UI.Services.LiveCase.ScopePrompt = LogAnalyzer.UI.Views.ScopeDialog.Ask;   // owner decision 28
 
-                // Operating mode: --mode= argument, then LogAnalyzer.mode next to the executable, then passive detection.
-                var modeFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LogAnalyzer.mode");
-                string? stationMode = File.Exists(modeFile) ? File.ReadAllText(modeFile) : null;
-                var decision = OperatingModeResolver.Resolve(e.Args, stationMode, new WindowsConnectivityProbe().Probe());
+                // Operating mode: decided by the edition. The unclassified edition takes it only from the signed policy
+                // (fail closed to AirGapped); --mode= and LogAnalyzer.mode are ignored. The classified edition is always AirGapped.
+                var decision = EditionComposition.DecideMode(e.Args, AppDomain.CurrentDomain.BaseDirectory);
                 AppModeContext.Initialize(decision);
                 File.AppendAllText(debugLogPath,
                     $"Mode: {decision.Mode} (override: {decision.IsOverride}) — {decision.Reason}\n" +
@@ -82,7 +102,7 @@ namespace LogAnalyzer.UI
                 services.AddSingleton<IAnalysisEngine, AnalysisEngine>();
                 services.AddSingleton<IRegistryParser, OfflineRegistryParser>();
                 services.AddSingleton<IDatabaseService, DatabaseService>();
-                services.AddSingleton<IAuditCollectionService, AuditCollectionService>();
+                EditionComposition.Register(services);
                 
                 // Componentele MVVM și Ferestrele din UI
                 services.AddTransient<MainViewModel>();
@@ -122,12 +142,26 @@ namespace LogAnalyzer.UI
                     }
                 }
 
+                // 2b. Autentificare (decizia 33): card + PIN pentru utilizatori; cont + parolă numai pentru administratorul principal.
+                splash.Hide();
+                AuthApp.Initialize();
+                var signedIn = SignInBeforeMainWindow(debugLogPath);
+                if (!signedIn)
+                {
+                    File.AppendAllText(debugLogPath, "Sign-in cancelled; shutting down.\n");
+                    splash.Close();
+                    this.Shutdown();
+                    return;
+                }
+                splash.Show();
+
                 // 3. Afișăm fereastra principală
                 File.AppendAllText(debugLogPath, "Resolving MainWindow...\n");
                 var mainWindow = ServiceProvider.GetRequiredService<MainWindow>();
                 this.MainWindow = mainWindow;
                 File.AppendAllText(debugLogPath, "Showing MainWindow...\n");
                 mainWindow.Show();
+                new SessionGuard(mainWindow).Start();      // lock on inactivity / card removal (card sessions only)
 
                 // --tab=<n> opens a given tab at startup (e.g. 13 = "Izolare procese suspecte").
                 var tabArg = Array.Find(e.Args, a => a.StartsWith("--tab=", StringComparison.OrdinalIgnoreCase));

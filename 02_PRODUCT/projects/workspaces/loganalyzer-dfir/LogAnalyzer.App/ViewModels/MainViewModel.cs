@@ -15,12 +15,12 @@ using LogAnalyzer.Core.Models;
 using LogAnalyzer.Core.Interfaces;
 using LogAnalyzer.Core.Services;
 using LogAnalyzer.Core.Services.Connectivity;
+using LogAnalyzer.Core.Services.Edition;
 using LogAnalyzer.Core.Services.Network;
 using LogAnalyzer.Infrastructure;
 using LogAnalyzer.Infrastructure.Engines;
 using LogAnalyzer.Infrastructure.Parsers;
 using LogAnalyzer.Infrastructure.Services;
-using LogAnalyzer.Infrastructure.Watchers;
 using Microsoft.Win32;
 using LogAnalyzer.UI.Services;
 
@@ -83,24 +83,39 @@ namespace LogAnalyzer.UI.ViewModels
         [ObservableProperty] private bool _isNetworkMode = !AppModeContext.IsAirGapped;
         [ObservableProperty] private string _systemModeBadgeText = AppModeContext.IsAirGapped ? "🛡️ AIR-GAPPED STANDALONE" : "🌐 NETWORK SOC";
         [ObservableProperty] private string _securityShieldStatusText = AppModeContext.IsAirGapped
-            ? "IZOLARE FIZICĂ STRICTĂ — PROTOCOL AIR-GAPPED CONFORM HG 585 / NATO"
-            : "SCUT DE SECURITATE DISPOZITIV & REȚEA ACTIV";
+            ? "Mod AirGapped: rețeaua este blocată de aplicație; izolarea fizică a stației nu este verificată"
+            : "Mod Network: serviciile online sunt permise; aplicația nu evaluează siguranța stației";
         [ObservableProperty] private string _modeReasonText = AppModeContext.Current.Reason;
         [ObservableProperty] private string _connectivityWarningText = string.Empty;
         public bool HasConnectivityWarning => !string.IsNullOrEmpty(ConnectivityWarningText);
         partial void OnConnectivityWarningTextChanged(string value) => OnPropertyChanged(nameof(HasConnectivityWarning));
 
         /// <summary>Per-program containment ("Izolare procese suspecte" tab).</summary>
-        public ContainmentViewModel Containment { get; } = new();
+        public object? Containment { get; }
+        /// <summary>True when this edition contains per-program containment.</summary>
+        public bool HasContainment => Containment is not null;
+        public IEditionProfile Edition { get; }
 
         /// <summary>Control audit of this station ("Control stație" tab).</summary>
         public StationControlViewModel StationControl { get; } = new();
 
         /// <summary>Domain users / e-mail investigation ("Investigație domeniu și e-mail" tab).</summary>
-        public DomainInvestigationViewModel DomainInvestigation { get; } = new();
+        public object? DomainInvestigation { get; }
 
         /// <summary>Full investigation pipeline ("Investigație completă" tab).</summary>
-        public InvestigationViewModel Investigation { get; } = new();
+        public InvestigationViewModel Investigation { get; }
+
+        /// <summary>WP5: the Home page ("Acasă"): case answers, coverage matrix, the three starting intents and the recent cases.</summary>
+        public HomeViewModel Home { get; }
+
+        /// <summary>Owner policies: import, lifecycle, verified application ("Politici" tab).</summary>
+        public PolicyViewModel Policy { get; }
+        /// <summary>"Profil de proceduri" (owner decisions 18, 19): working hours, log maintenance, approved software, expected policy, zones and transfers.</summary>
+        public ProcedureProfileViewModel ProcedureProfile { get; }
+        /// <summary>"Registru medii" (decision 16) and "Registru utilizatori" (decision 17): data the operator enters; observed media are compared with them.</summary>
+        public MediaRegisterViewModel MediaRegister { get; }
+        public UsersRegisterViewModel UsersRegister { get; }
+        public AuthViewModel Auth { get; }
 
         // Session / Module Management
         [ObservableProperty] private int _selectedModuleIndex = 0; // 0 for Forensics, 1 for Collection
@@ -108,8 +123,8 @@ namespace LogAnalyzer.UI.ViewModels
         // AI / Heuristic Analysis Properties
         public ObservableCollection<AiAnomalyItem> AiAnomalies { get; set; } = new();
         [ObservableProperty] private int _aiRiskScore = 0;
-        [ObservableProperty] private string _aiRiskLevel = "SCĂZUT (Normal)";
-        [ObservableProperty] private string _aiRiskColor = "#22c55e";
+        [ObservableProperty] private string _aiRiskLevel = "NEDETERMINAT (analiza nu a fost rulată)";
+        [ObservableProperty] private string _aiRiskColor = "#94a3b8";
         [ObservableProperty] private int _aiHighEntropyCount = 0;
         [ObservableProperty] private int _aiMasqueradingCount = 0;
         [ObservableProperty] private int _aiOffHoursCount = 0;
@@ -141,7 +156,7 @@ namespace LogAnalyzer.UI.ViewModels
         public ObservableCollection<ProvenanceLedgerEntry> ProvenanceEntries { get; set; } = new();
         public ObservableCollection<MitreTacticColumn> MitreTacticColumns { get; set; } = new();
         public ObservableCollection<MultiEventCorrelationFinding> MultiEventCorrelations { get; set; } = new();
-        [ObservableProperty] private string _provenanceStatusMessage = "✅ Lanț Criptografic Verificat (SHA-256)";
+        [ObservableProperty] private string _provenanceStatusMessage = "Lanțul de custodie nu a fost verificat în această sesiune";
 
         // ADAudit Plus & Active Directory Analytics Properties
         [ObservableProperty] private int _adEventsAnalyzedCount = 0;
@@ -236,9 +251,14 @@ namespace LogAnalyzer.UI.ViewModels
         }
 
         // Dashboard stats
-        [ObservableProperty] private int _selectedTabIndex = 0;
+        [ObservableProperty] private int _selectedTabIndex = HomeViewModel.HomeTabIndex;   // WP5: the app opens on Home
         [ObservableProperty] private int _totalEventsCount;
         [ObservableProperty] private int _totalAlertsCount;
+        // Severity counts of the loaded alerts; test alerts (DetectedIssue.IsTestAlert) are excluded.
+        [ObservableProperty] private int _criticalAlertsCount;
+        [ObservableProperty] private int _highAlertsCount;
+        [ObservableProperty] private int _mediumAlertsCount;
+        [ObservableProperty] private int _lowAlertsCount;
         [ObservableProperty] private int _totalRegistryCount;
         [ObservableProperty] private int _totalHostsCount;
 
@@ -306,7 +326,10 @@ namespace LogAnalyzer.UI.ViewModels
         [ObservableProperty] private DfirProfile? _selectedProfile;
 
         // Live Security Monitoring (Real-Time EDR & Streaming)
-        private LiveEventLogWatcherService? _liveWatcher;
+        private ILiveEventSource? _liveWatcher;
+        private readonly ILiveEventSourceFactory _liveSourceFactory;
+        private readonly IHostDefense _hostDefense;
+        private readonly IConnectivityWatcher _connectivityWatcher;
         private readonly LiveSecurityMonitoringEngine _liveEngine = new();
         public ObservableCollection<ParsedEvent> LiveStreamingEvents { get; } = new();
         public ObservableCollection<DetectedIssue> LiveAlerts { get; } = new();
@@ -374,9 +397,9 @@ namespace LogAnalyzer.UI.ViewModels
             ActiveCountermeasurePlaybook = _countermeasureEngine.GeneratePlaybook(alert, hostname);
             var ev = alert.RelatedEvents?.FirstOrDefault();
             RawEventMessage = ev?.Message ?? alert.Explanation ?? string.Empty;
-            RawEventId = ev != null ? $"EID: {ev.EventId} | Nivel: {ev.Level}" : "EID: 9999 (Security Detection)";
-            RawEventProvider = ev?.ProviderName ?? "LogAnalyzer Real-Time Sensor";
-            RawEventTimestamp = ev?.TimeCreated.ToString("yyyy-MM-dd HH:mm:ss.fff") ?? DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            RawEventId = ev != null ? $"EID: {ev.EventId} | Nivel: {ev.Level}" : "EID: nedisponibil (alerta nu are eveniment sursă)";
+            RawEventProvider = ev?.ProviderName ?? "nedisponibil";
+            RawEventTimestamp = ev is null ? "nedisponibil" : ev.TimeCreated == default ? "necunoscut (lipsește din eveniment)" : ev.TimeCreated.ToString("yyyy-MM-dd HH:mm:ss.fff");
             RawEventHost = ev?.MachineName ?? hostname;
             IsCountermeasureModalVisible = true;
         }
@@ -391,7 +414,7 @@ namespace LogAnalyzer.UI.ViewModels
                     Clipboard.SetText(RawEventMessage);
                     StatusMessage = "📋 Detalii eveniment copiate în Clipboard.";
                 }
-                catch {}
+                catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or System.Runtime.InteropServices.ExternalException) { StatusMessage = $"Clipboard indisponibil: {ex.Message}"; }
             }
         }
 
@@ -530,8 +553,24 @@ namespace LogAnalyzer.UI.ViewModels
         public MainViewModel(
             IEventParser eventParser, IAnalysisEngine analysisEngine, IRegistryParser registryParser,
             AuditLogService auditService, KnowledgeBaseService kbService, PluginManagerService pluginManager,
-            IDatabaseService databaseService, IAuditCollectionService collectionService, EvidenceIntakeService evidenceIntake)
+            IDatabaseService databaseService, IAuditCollectionService collectionService, EvidenceIntakeService evidenceIntake,
+            IEditionProfile edition, IFeatureViewFactory featureViews, IHostDefense hostDefense,
+            ILiveEventSourceFactory liveSourceFactory, IConnectivityWatcher connectivityWatcher,
+            LogAnalyzer.Dfir.Windows.Policy.IRegistryValueWriter? registryWriter = null)
         {
+            Edition = edition;
+            _hostDefense = hostDefense;
+            _liveSourceFactory = liveSourceFactory;
+            _connectivityWatcher = connectivityWatcher;
+            Containment = featureViews.CreateViewModel(FeatureKeys.Containment);
+            DomainInvestigation = featureViews.CreateViewModel(FeatureKeys.DomainInvestigation);
+            Investigation = new InvestigationViewModel(inv => featureViews.CreateViewModel(FeatureKeys.AiAnalysis, inv));
+            Home = new HomeViewModel(Investigation, tab => SelectedTabIndex = tab);
+            Policy = new PolicyViewModel(registryWriter);
+            ProcedureProfile = new ProcedureProfileViewModel();
+            MediaRegister = new MediaRegisterViewModel();
+            UsersRegister = new UsersRegisterViewModel();
+            Auth = new AuthViewModel();
             _eventParser = eventParser;
             _analysisEngine = analysisEngine;
             _registryParser = registryParser;
@@ -549,7 +588,7 @@ namespace LogAnalyzer.UI.ViewModels
                 string categoriesPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Categories");
                 _kbService.LoadCategories(categoriesPath);
             }
-            catch { }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { StatusMessage = $"Baza de cunoștințe (Categories) nu a putut fi încărcată: {ex.Message}"; }
 
             IssuesView = CollectionViewSource.GetDefaultView(DetectedIssues);
             IssuesView.Filter = FilterIssues;
@@ -559,7 +598,7 @@ namespace LogAnalyzer.UI.ViewModels
             InitializeSigmaRules();
             PopulateMitreMatrix();
 
-            OperatorName = $"{Environment.UserName.ToUpper()} @ {Environment.MachineName.ToUpper()}";
+            OperatorName = $"{LogAnalyzer.Dfir.Auth.OperatorIdentity.Who.ToUpper()} @ {Environment.MachineName.ToUpper()}";   // the signed-in identity (decision 33)
             // Detail windows look for related events among the events loaded in this session.
             LogAnalyzer.Core.Services.Details.DetailSheetBuilder.EventCorpus = () => Events.ToList();
             if (IsNetworkMode)
@@ -591,7 +630,7 @@ namespace LogAnalyzer.UI.ViewModels
                             StartLiveMonitoring();
                     });
                 }
-                catch { }
+                catch (Exception ex) { StatusMessage = $"Reîncărcarea datelor din baza locală a eșuat: {ex.Message}"; }
             });
         }
 
@@ -608,7 +647,7 @@ namespace LogAnalyzer.UI.ViewModels
                 Events.Clear();
                 Events.AddRange(list);
             }
-            catch { }
+            catch (Exception ex) { StatusMessage = $"Evenimentele nu au putut fi citite din baza locală: {ex.Message}"; }
         }
 
         private void ReloadRegistryFromDb()
@@ -632,7 +671,7 @@ namespace LogAnalyzer.UI.ViewModels
                 RegistryArtifacts.Clear();
                 RegistryArtifacts.AddRange(list);
             }
-            catch { }
+            catch (Exception ex) { StatusMessage = $"Artefactele de registru nu au putut fi citite din baza locală: {ex.Message}"; }
         }
 
         private void ReloadTimelineFromDb()
@@ -662,11 +701,16 @@ namespace LogAnalyzer.UI.ViewModels
                 TotalEventsCount = _databaseService.GetEventsCount(null, null, null);
                 TotalRegistryCount = _databaseService.GetRegistryArtifactsCount(null);
                 TotalHostsCount = _databaseService.GetUniqueHostsCount();
-                TotalAlertsCount = DetectedIssues.Count;
+                var distribution = SeverityDistribution.Count(DetectedIssues);
+                TotalAlertsCount = distribution.Total;
+                CriticalAlertsCount = distribution.Critical;
+                HighAlertsCount = distribution.High;
+                MediumAlertsCount = distribution.Medium;
+                LowAlertsCount = distribution.LowOrInfo;
 
                 PopulateMitreMatrix();
             }
-            catch { }
+            catch (Exception ex) { StatusMessage = $"Statisticile nu au putut fi calculate: {ex.Message}"; }
         }
 
         [RelayCommand]
@@ -999,7 +1043,7 @@ namespace LogAnalyzer.UI.ViewModels
         private void TriggerContainmentPlaybook(string target)
         {
             var res = _actionTriggerService.ExecuteContainmentScript("Izolare Cont / Stație", target ?? "SelectedEntity", IsAirGappedMode);
-            MessageBox.Show(res.OutputLog, "Rezultat Răspuns Incident (Containment Playbook)", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(res.OutputLog, "Acțiune neexecutată (Containment Playbook)", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
         [RelayCommand]
@@ -1229,7 +1273,7 @@ namespace LogAnalyzer.UI.ViewModels
                         }
                     }
                 }
-                catch { }
+                catch (RegexMatchTimeoutException ex) { SelectedEventProperties.Add(new("Eroare extragere câmpuri", ex.Message)); }
             }
 
             SelectedEventThreatScenario = assessment.ThreatScenarioRo;
@@ -1634,11 +1678,12 @@ namespace LogAnalyzer.UI.ViewModels
         /// An isolated station that gains a network connection is itself an incident. The mode is never switched
         /// automatically (networked features stay blocked); the investigator is warned instead.
         /// </summary>
+        private IDisposable? _connectivitySubscription;
+
         private void WatchIsolatedStationConnectivity()
         {
-            System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (_, _) =>
+            _connectivitySubscription = _connectivityWatcher.Watch(snapshot =>
             {
-                var snapshot = new WindowsConnectivityProbe().Probe();
                 if (snapshot.State is ConnectivityState.NoNetwork or ConnectivityState.Unknown) return;
 
                 var warning = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} — stația pornită în modul AirGapped are acum " +
@@ -1649,7 +1694,7 @@ namespace LogAnalyzer.UI.ViewModels
                     ConnectivityWarningText = warning;
                     StatusMessage = "⚠ " + warning;
                 });
-            };
+            });
         }
 
         [RelayCommand]
@@ -1657,7 +1702,12 @@ namespace LogAnalyzer.UI.ViewModels
         {
             if (IsLiveMonitoringActive) return;
 
-            _liveWatcher = new LiveEventLogWatcherService();
+            _liveWatcher = _liveSourceFactory.Create();
+            if (_liveWatcher is null)
+            {
+                LiveMonitoringStatusText = EditionText.Unavailable("Monitorizarea în timp real");
+                return;
+            }
             _liveWatcher.OnStatusChanged += status =>
             {
                 Application.Current?.Dispatcher?.Invoke(() => LiveMonitoringStatusText = status);
@@ -1702,6 +1752,7 @@ namespace LogAnalyzer.UI.ViewModels
                     });
 
                     // 4. Real-time Security Evaluation
+                    _liveEngine.MaintenancePolicy = LogAnalyzer.Dfir.Profile.ProfileProvider.Shared.MaintenancePolicyFor([new DateTimeOffset(ev.TimeCreated.ToUniversalTime())]);
                     var alert = _liveEngine.EvaluateLiveEvent(ev);
                     if (alert != null)
                     {
@@ -1733,7 +1784,7 @@ namespace LogAnalyzer.UI.ViewModels
 
                         }
 
-                        try { System.Media.SystemSounds.Exclamation.Play(); } catch {}
+                        try { System.Media.SystemSounds.Exclamation.Play(); } catch (InvalidOperationException) { /* sound is optional */ }
 
                         _toastAutoDismissTimer?.Stop();
                         _toastAutoDismissTimer = new System.Timers.Timer(7000);
@@ -1790,12 +1841,12 @@ namespace LogAnalyzer.UI.ViewModels
         {
             if (MessageBox.Show("Izolați ÎNTREAGA stație de rețea (tot traficul de ieșire blocat)?\n\nPentru un singur program suspect folosiți „Izolare procese suspecte”, care lasă restul PC-ului conectat.",
                     "Izolare stație", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-            var res = SystemDefenseExecutionService.IsolateHostFromNetwork();
+            var res = _hostDefense.IsolateHostFromNetwork();
             StatusMessage = $"🛡️ {res.Message}";
             IsCountermeasureModalVisible = false;
-            _auditService.LogAction("HOST_ISOLATION", $"{OperatorName} - {res.Message}");
-            MessageBox.Show(res.Message + "\n\n(Puteți ridica izolarea oricând din bara laterală prin butonul de restaurare rețea).", 
-                res.Success ? "Combatere Atac Cibernetic - Succes" : "Avertisment Izolare", 
+            _auditService.LogAction("HOST_ISOLATION", $"{OperatorName} - {res.Status} - {res.Message}");
+            MessageBox.Show(res.Message + (res.Success ? "\n\n(Puteți ridica izolarea oricând din bara laterală prin butonul de restaurare rețea)." : $"\n\n{res.ExecutionDetails}"),
+                res.Success ? "Izolare stație — verificată" : $"Izolare stație — {res.Status}",
                 MessageBoxButton.OK, 
                 res.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
         }
@@ -1803,10 +1854,11 @@ namespace LogAnalyzer.UI.ViewModels
         [RelayCommand]
         private void ExecuteRestoreNetwork()
         {
-            var res = SystemDefenseExecutionService.RestoreNetworkAccess();
+            var res = _hostDefense.RestoreNetworkAccess();
             StatusMessage = $"🌐 {res.Message}";
-            _auditService.LogAction("HOST_RESTORE_NETWORK", $"{OperatorName} - {res.Message}");
-            MessageBox.Show(res.Message, "Restaurare Rețea", MessageBoxButton.OK, MessageBoxImage.Information);
+            _auditService.LogAction("HOST_RESTORE_NETWORK", $"{OperatorName} - {res.Status} - {res.Message}");
+            MessageBox.Show(res.Success ? res.Message : $"{res.Message}\n\n{res.ExecutionDetails}", $"Restaurare rețea — {res.Status}", MessageBoxButton.OK,
+                res.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
         }
 
 
@@ -1838,13 +1890,15 @@ namespace LogAnalyzer.UI.ViewModels
                 MessageBox.Show("Alerta nu conține nicio adresă IP publică de blocat.", "Blocare IoC", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-            if (MessageBox.Show($"Blocați în Windows Firewall traficul de ieșire către:\n\n{string.Join("\n", ips)}\n\nAdresele provin din textul alertei. Regula se poate șterge din „Restaurare rețea”.",
+            if (MessageBox.Show($"Blocați în Windows Firewall traficul de ieșire către:\n\n{string.Join("\n", ips)}\n\nAdresele provin din textul alertei. Pentru fiecare se creează regula „DFIR_BLOCK_IOC <adresă>”, care se șterge din Windows Defender Firewall.",
                     "Blocare IoC", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
             foreach (var ip in ips)
             {
-                var res = SystemDefenseExecutionService.BlockMaliciousIoC(ip);
-                _auditService.LogAction("BLOCK_IOC_FIREWALL", $"{OperatorName} - Tinta: {ip}, Rezultat: {res.Message}");
+                var res = _hostDefense.BlockMaliciousIoC(ip);
+                _auditService.LogAction("BLOCK_IOC_FIREWALL", $"{OperatorName} - Tinta: {ip}, {res.Status}: {res.Message}");
                 StatusMessage = res.Message;
+                if (!res.Success)
+                    MessageBox.Show($"{res.Message}\n\n{res.ExecutionDetails}", $"Blocare IoC — {res.Status}", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 
@@ -1914,7 +1968,7 @@ namespace LogAnalyzer.UI.ViewModels
                             LoadingSubDetail = $"Verificare hash: {Path.GetFileName(file)} ({scannedCount}/{targetFiles.Count})";
                         });
 
-                        _evidenceIntake.Import(file, Environment.UserName);
+                        _evidenceIntake.Import(file, LogAnalyzer.Dfir.Auth.OperatorIdentity.Who);
                         acceptedFiles.Add(file);
 
                         using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
@@ -2153,6 +2207,9 @@ namespace LogAnalyzer.UI.ViewModels
                 var eventsForAnalysis = _databaseService.GetEvents(20000, 0, null, null, securityEventIds).ToList();
                 var registryForAnalysis = _databaseService.GetRegistryArtifacts(10000, 0, null).ToList();
                 
+                // WP15a: the procedure profile (approved accounts, maintenance windows) decides whether a log clear was planned; none = unchanged.
+                if (_analysisEngine is AnalysisEngine profiled)
+                    profiled.MaintenancePolicy = LogAnalyzer.Dfir.Profile.ProfileProvider.Shared.MaintenancePolicyFor(eventsForAnalysis.Select(e => new DateTimeOffset(e.TimeCreated.ToUniversalTime())));
                 var issues = _analysisEngine.AnalyzeEvents(eventsForAnalysis);
                 var regIssues = _analysisEngine.AnalyzeRegistry(registryForAnalysis);
                 
@@ -2483,7 +2540,7 @@ namespace LogAnalyzer.UI.ViewModels
                 int totalCount = anomalies.Count + yaraMatches.Count;
 
                 // Evaluare Scor de Risc Explicabil (ISO/IEC 27042)
-                var explainableRisk = _explainableAiEngine.Evaluate(DetectedIssues, entropyCount, masqCount, offHoursCount, yaraMatches.Count);
+                var explainableRisk = _explainableAiEngine.Evaluate(DetectedIssues, entropyCount, masqCount, offHoursCount, yaraMatches.Count, LogAnalyzer.Dfir.Profile.ProfileProvider.Shared.WorkingHours);
                 AiRiskScore = explainableRisk.TotalScore;
                 AiRiskLevel = explainableRisk.Level;
                 AiRiskColor = explainableRisk.LevelColor;
@@ -2516,7 +2573,7 @@ namespace LogAnalyzer.UI.ViewModels
                 }
 
                 // Analiză Comportamentală Utilizatori UBA (User Behavior Analytics)
-                var ubaFindings = _ubaEngine.Evaluate(eventsForAnalysis);
+                var ubaFindings = _ubaEngine.Evaluate(eventsForAnalysis, LogAnalyzer.Dfir.Profile.ProfileProvider.Shared.WorkingHours);
                 UbaAnomalies.Clear();
                 foreach (var uf in ubaFindings)
                 {
@@ -2757,7 +2814,7 @@ namespace LogAnalyzer.UI.ViewModels
                 var reg = _databaseService.GetRegistryArtifacts(10000, 0, null);
                 _timelineExportService.ExportPlasoCsv(tempCsv, events, new List<ForensicArtifact>(), reg);
                 string csvContent = File.ReadAllText(tempCsv);
-                try { File.Delete(tempCsv); } catch { }
+                try { File.Delete(tempCsv); } catch (IOException) { /* temp copy only; the exported content is already read */ }
 
                 string zipSha = _casePackagingService.PackageAndSealCase(
                     dialog.FileName,
@@ -2787,6 +2844,15 @@ namespace LogAnalyzer.UI.ViewModels
             if (openDialog.ShowDialog() == true)
             {
                 string targetFile = openDialog.FileName;
+                var confirm = MessageBox.Show(
+                    $"Fișierul de mai jos va fi SUPRASCRIS ireversibil cu 0x00:\n\n{targetFile}\n({new FileInfo(targetFile).Length:N0} bytes)\n\n" +
+                    "Operația nu se poate anula. Nu folosiți această funcție pe probe nepreluate sau pe fișiere din cazul deschis.\n\nContinuați?",
+                    "Confirmare operație distructivă", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+                if (confirm != MessageBoxResult.Yes)
+                {
+                    StatusMessage = "Sanitizare anulată de operator.";
+                    return;
+                }
                 var saveDialog = new SaveFileDialog
                 {
                     Title = "Salvați Certificatul Oficial de Sanitizare PDF",
@@ -2808,29 +2874,17 @@ namespace LogAnalyzer.UI.ViewModels
 
                         if (result.Success)
                         {
-                            var certData = new SanitizationCertificateData
-                            {
-                                CertificateId = $"SAN-CERT-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid():N}".Substring(0, 24).ToUpperInvariant(),
-                                DeviceVendor = "Dispozitiv / Fișier Țintă",
-                                DeviceModel = Path.GetFileName(targetFile),
-                                HardwareSerialNumber = "HD-" + Guid.NewGuid().ToString("N").Substring(0, 12).ToUpperInvariant(),
-                                DeviceCapacityBytes = result.TotalBytesSanitized,
-                                SanitizationMethodName = "NIST SP 800-88r2 Clear (1-Pass Zeroize)",
-                                TotalPasses = result.TotalPassesExecuted,
-                                PreSanitizationSha256 = result.PreSanitizationSha256,
-                                PostSanitizationSha256 = result.PostSanitizationSha256,
-                                PrimaryOperator = OperatorName,
-                                VerifierOperator = "Ofițer Securitate Informatică",
-                                SystemHostId = Environment.MachineName,
-                                TamperEvidentAuditHash = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N"),
-                                IsVerifiedZeroized = true
-                            };
+                            var certData = SanitizationCertificateData.FromResult(result, targetFile, OperatorName);
 
                             _sanitizationPdfGenerator.GeneratePdfCertificate(saveDialog.FileName, certData);
-                            _provenanceLedger.AppendEntry("MEDIA_SANITIZED_CERT_PDF", saveDialog.FileName, result.PostSanitizationSha256, $"Sanitizare NIST SP 800-88r2 finalizată cu succes pe '{Path.GetFileName(targetFile)}'. Emis certificat PDF.");
-                            
-                            MessageBox.Show($"Procedura de sanitizare NIST SP 800-88r2 a fost finalizată cu succes!\n\nCertificatul oficial PDF a fost emis în:\n{saveDialog.FileName}", "Sanitizare & Certificare Reușită", MessageBoxButton.OK, MessageBoxImage.Information);
-                            StatusMessage = "✅ Sanitizare finalizată și Certificat PDF emis cu succes!";
+                            var verdict = result.ReadBackVerified ? "verificată prin citire" : $"NEVERIFICATĂ ({result.ReadBackNote})";
+                            _provenanceLedger.AppendEntry("MEDIA_SANITIZED_CERT_PDF", saveDialog.FileName, result.PostSanitizationSha256,
+                                $"Suprascriere {result.Method} pe '{Path.GetFileName(targetFile)}', {verdict}. Hash audit certificat: {certData.TamperEvidentAuditHash}.");
+
+                            MessageBox.Show($"Fișierul a fost suprascris; zeroizarea este {verdict}.\n\nRaportul PDF a fost salvat în:\n{saveDialog.FileName}\n\n" +
+                                "Seria dispozitivului și al doilea operator nu sunt cunoscute de aplicație și apar ca NEDECLARAT.",
+                                "Sanitizare", MessageBoxButton.OK, result.ReadBackVerified ? MessageBoxImage.Information : MessageBoxImage.Warning);
+                            StatusMessage = result.ReadBackVerified ? "Sanitizare finalizată și verificată prin citire." : "Sanitizare finalizată, dar NEVERIFICATĂ.";
                         }
                         else
                         {

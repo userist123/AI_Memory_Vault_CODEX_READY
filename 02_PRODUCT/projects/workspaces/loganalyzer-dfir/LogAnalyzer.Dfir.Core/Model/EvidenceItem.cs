@@ -21,6 +21,10 @@ public sealed class EvidenceItem
     public string Timezone { get; init; } = "";
     public string Collector { get; init; } = "";
     public string CollectorVersion { get; init; } = "";
+    /// <summary>How the object entered the case: "acquired" (collected from the station) or "imported" (copied from a file).</summary>
+    public string AcquisitionMethod { get; init; } = "";
+    /// <summary>The stored copy was marked read-only at registration.</summary>
+    public bool ReadOnly { get; init; }
     public string Parser { get; set; } = "";
     public string ParserVersion { get; set; } = "";
     public EvidenceStatus Status { get; set; }
@@ -28,4 +32,9 @@ public sealed class EvidenceItem
     public Sensitivity Sensitivity { get; init; } = Sensitivity.Confidential;
     public string? ParentEvidenceId { get; init; }
     public string Notes { get; set; } = "";
+    /// <summary>Lifecycle state (decision 11). Absent in JSON written before WP3 = <see cref="EvidenceState.Acquired"/>.</summary>
+    public EvidenceState State { get; set; } = EvidenceState.Acquired;
 }
+
+/// <summary>ACQUIRED → VERIFIED → IN_ANALYSIS → ARCHIVED; DISPOSED is only a manual mark, never a deletion.</summary>
+public enum EvidenceState { Acquired, Verified, InAnalysis, Archived, Disposed }

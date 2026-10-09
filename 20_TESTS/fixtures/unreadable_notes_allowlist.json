@@ -218,6 +218,114 @@
       "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
     },
     {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/AI_FORENSIC_REASONING.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/MEMORY_VAULT_INTEGRATION.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/ANTI_FORENSICS_TESTING.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/COMPLIANCE_MODEL.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/INTEGRITY_RECHECK.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/POLICY_ENGINE.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/UNWIRED_COMPONENTS.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/DETECTION.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/EVIDENCE_GRAPH.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/FORENSIC_TEST_LAB.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/PARSER_CONTRACT.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/RELEASE_GATE.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/EVIDENCE_MODEL.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/CONTRACT_AUDIT_STAGE1.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/LOGANALYZER_PRODUCT_UX_CONTRACT.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/LOGANALYZER_PROGRAM_REQUIREMENTS.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/STAGE2_BASELINE.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/REALITY_AUDIT.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
       "path": "02_PRODUCT/projects/workspaces/registru-transferuri/docs/DEPLOYMENT.md",
       "kind": "no_frontmatter",
       "category": "plain_document",
@@ -350,10 +458,196 @@
       "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
     },
     {
+      "path": "00_GOVERNANCE/rules/POLICY-LEARNING-QUALITY-02.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Governance policy document, not a storage-engine memory note. Adding note frontmatter would assign lifecycle and verification metadata to policy text and could change retrieval semantics."
+    },
+    {
       "path": "01_KNOWLEDGE/README.md",
       "kind": "no_frontmatter",
       "category": "plain_document",
       "reason": "Plain markdown README documenting the knowledge area; it is not a memory note and therefore intentionally has no note frontmatter."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/FINDING_CONTRACT.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown README documenting the knowledge area; it is not a memory note and therefore intentionally has no note frontmatter."
+    },
+    {
+      "path": "00_GOVERNANCE/coordination/tasks/todo-claude-wp2.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown README documenting the knowledge area; it is not a memory note and therefore intentionally has no note frontmatter."
+    },
+    {
+      "path": "00_GOVERNANCE/coordination/tasks/README.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Agent checkpoint protocol / working checkpoint, plain markdown; not a vault note."
+    },
+    {
+      "path": "00_GOVERNANCE/coordination/tasks/todo-claude-orchestrator.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Agent checkpoint protocol / working checkpoint, plain markdown; not a vault note."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/HG585_ACCREDITATION_REQUIREMENTS.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain planning/research document for LogAnalyzer stage 2; not a vault note."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/HG585_QUOTE_SOURCES.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain planning/research document for LogAnalyzer stage 2; not a vault note."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/LESSONS_LEARNED_MAPPING.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain planning/research document for LogAnalyzer stage 2; not a vault note."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/LOGANALYZER_LESSONS_LEARNED_COMPLETE.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain planning/research document for LogAnalyzer stage 2; not a vault note."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/PR212_RESEARCH_2026-10-07.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain planning/research document for LogAnalyzer stage 2; not a vault note."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/WINDOWS_TOOLING_COMPAT.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain planning/research document for LogAnalyzer stage 2; not a vault note."
+    },
+    {
+      "path": "00_GOVERNANCE/coordination/projects/LOGANALYZER_DFIR/STAGE2_PLAN.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain planning/research document for LogAnalyzer stage 2; not a vault note."
+    },
+    {
+      "path": "00_GOVERNANCE/coordination/tasks/todo-claude-print-research.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain planning/research document for LogAnalyzer stage 2; not a vault note."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/PRINT_TRACKING_RESEARCH.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain planning/research document for LogAnalyzer stage 2; not a vault note."
+    },
+    {
+      "path": "00_GOVERNANCE/coordination/tasks/todo-claude-wp-ed.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Agent checkpoint file (owner rule 2026-10-08); plain markdown, not a note."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/EDITIONS.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/SUPPORTED_WINDOWS.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "00_GOVERNANCE/coordination/tasks/todo-claude-wp1b.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Agent checkpoint file (owner rule 2026-10-08); plain markdown, not a note."
+    },
+    {
+      "path": "00_GOVERNANCE/coordination/tasks/todo-claude-wp3.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Agent checkpoint file (owner rule 2026-10-08); plain markdown, not a note."
+    },
+    {
+      "path": "00_GOVERNANCE/coordination/tasks/todo-claude-wp4.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Agent checkpoint file (owner rule 2026-10-08); plain markdown, not a note."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/VERIFICATION.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "00_GOVERNANCE/coordination/tasks/todo-claude-wp15.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Agent checkpoint file (owner rule 2026-10-08); plain markdown, not a note."
+    },
+    {
+      "path": "00_GOVERNANCE/coordination/tasks/todo-claude-wp11.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Agent checkpoint file (owner rule 2026-10-08); plain markdown, not a note."
+    },
+    {
+      "path": "00_GOVERNANCE/coordination/tasks/todo-claude-wp14.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Agent checkpoint file (owner rule 2026-10-08); plain markdown, not a note."
+    },
+    {
+      "path": "00_GOVERNANCE/coordination/tasks/todo-claude-wp-auth.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Agent checkpoint file (owner rule 2026-10-08); plain markdown, not a note."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/AUTHENTICATION.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "00_GOVERNANCE/coordination/tasks/todo-claude-wp14b.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Agent checkpoint file (owner rule 2026-10-08); plain markdown, not a note."
+    },
+    {
+      "path": "00_GOVERNANCE/coordination/tasks/todo-claude-wp5.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Agent checkpoint file (owner rule 2026-10-08); plain markdown, not a note."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/CASE_HOME.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
+    },
+    {
+      "path": "00_GOVERNANCE/coordination/tasks/todo-claude-wp6a.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Agent checkpoint file (owner rule 2026-10-08); plain markdown, not a note."
+    },
+    {
+      "path": "02_PRODUCT/projects/workspaces/loganalyzer-dfir/docs/dfir/FINDING_CARD.md",
+      "kind": "no_frontmatter",
+      "category": "plain_document",
+      "reason": "Plain markdown document with no frontmatter; not a note. Giving it frontmatter would mean choosing id/lifecycle/verification values, which is an owner decision."
     }
   ]
 }

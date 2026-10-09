@@ -4,6 +4,7 @@ using System.Linq;
 using LogAnalyzer.Core.Interfaces;
 using LogAnalyzer.Core.Models;
 using LogAnalyzer.Core.Services;
+using LogAnalyzer.Dfir.Analysis;
 using LogAnalyzer.Infrastructure.Engines;
 
 namespace LogAnalyzer.Infrastructure
@@ -17,6 +18,9 @@ namespace LogAnalyzer.Infrastructure
         public SigmaRuleEngine SigmaEngine => _sigmaEngine;
         public YaraRuleEngine YaraEngine => _yaraEngine;
         public AnomalyDetectionEngine AnomalyEngine => _anomalyEngine;
+
+        /// <summary>Approved accounts and maintenance windows from the procedure profile (WP15a); <c>null</c> = no profile, log clears stay NotAssessed.</summary>
+        public LogMaintenancePolicy? MaintenancePolicy { get; set; }
 
         public IEnumerable<DetectedIssue> AnalyzeEvents(IEnumerable<ParsedEvent> events)
         {
@@ -43,11 +47,13 @@ namespace LogAnalyzer.Infrastructure
                 // Regula 2: Ștergerea Jurnalelor de Securitate (Evaziune)
                 else if (ev.EventId == 1102 || ev.EventId == 104)
                 {
+                    var (clearUser, clearDomain) = LogClearAssessment.SubjectFromXml(ev.XmlData);
+                    var clear = LogClearAssessment.AssessUnscheduled(ev.EventId == 1102 ? "Security" : "System", new DateTimeOffset(ev.TimeCreated.ToUniversalTime()), MaintenancePolicy, clearUser, clearDomain);
                     issues.Add(new DetectedIssue
                     {
-                        Title = "Jurnal de securitate curățat / șters",
-                        Severity = "Critical",
-                        Explanation = $"Jurnalul de evenimente a fost curățat manual pe mașina [{ev.MachineName}] (EID {ev.EventId}). Acesta este un indicator puternic de ascundere a urmelor (Defense Evasion).",
+                        Title = "Jurnal de evenimente golit",
+                        Severity = clear.Severity.ToString(),
+                        Explanation = $"Golire de jurnal ({clear.Clear.Channel}) pe mașina [{ev.MachineName}] (EID {ev.EventId}). Golirea poate fi mentenanță planificată sau ascundere de urme; {clear.Reason}",
                         ComplianceTag = "HG 585/2002 - Audit Securitate",
                         MitreTechniqueId = "T1070.001",
                         Status = AlertStatus.Nouă

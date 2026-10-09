@@ -8,7 +8,7 @@ using Microsoft.Win32;
 
 namespace LogAnalyzer.Dfir.Windows.Acquisition;
 
-/// <summary>Exports event log channels with wevtutil (raw .evtx, never re-rendered). Security needs elevation.</summary>
+/// <summary>Exports event log channels as raw .evtx with EvtExportLog (the wevtutil engine, in process; never re-rendered). Security needs elevation.</summary>
 public sealed class EventLogCollector : ICollector
 {
     public static readonly string[] Channels =
@@ -19,7 +19,11 @@ public sealed class EventLogCollector : ICollector
         "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational", "Microsoft-Windows-TerminalServices-RemoteConnectionManager/Operational",
         "Microsoft-Windows-Sysmon/Operational", "Microsoft-Windows-Bits-Client/Operational", "Microsoft-Windows-WMI-Activity/Operational",
         "Microsoft-Windows-Windows Firewall With Advanced Security/Firewall", "Microsoft-Windows-Partition/Diagnostic",
+        "Microsoft-Windows-WinRM/Operational", "OpenSSH/Operational",
         "Microsoft-Windows-NetworkProfile/Operational", "Microsoft-Windows-WLAN-AutoConfig/Operational", "Microsoft-Windows-DNS-Client/Operational",
+        // WP14a: removable media, CD/DVD and network adapters on air-gapped systems. A channel that does not exist on this system is "indisponibil", not a failure.
+        "Microsoft-Windows-Kernel-PnP/Configuration", "Microsoft-Windows-DriverFrameworks-UserMode/Operational", "Microsoft-Windows-Dhcp-Client/Operational",
+        "Microsoft-Windows-VHDMP-Operational",
     ];
 
     public string Name => "EventLogCollector";
@@ -29,7 +33,7 @@ public sealed class EventLogCollector : ICollector
 
     public CollectorOutcome Collect(CollectorContext ctx, CancellationToken ct)
     {
-        var o = new CollectorOutcome { Tool = "wevtutil.exe", ToolVersion = ToolRunner.FileVersion(ToolRunner.System32("wevtutil.exe")), Source = "event logs" };
+        var o = new CollectorOutcome { Tool = "EvtExportLog (wevtapi.dll)", ToolVersion = ToolRunner.FileVersion(ToolRunner.System32("wevtapi.dll")), Source = "event logs" };
         var dir = ctx.Case.RawDir("EventLogs");
         var logDir = Path.Combine(ctx.Case.Root, "Logs", "tools");
         int done = 0;
@@ -39,12 +43,17 @@ public sealed class EventLogCollector : ICollector
             ctx.Progress?.Report(new CollectorProgress(Name, ch, done++ * 100 / Channels.Length));
             if (ch == "Security" && !ctx.IsElevated) { o.Errors.Add("Security: necesită drepturi de administrator"); continue; }
             var dest = Path.Combine(dir, ch.Replace('/', '%') + ".evtx");
-            var run = ToolRunner.Run(ToolRunner.System32("wevtutil.exe"), ["epl", ch, dest, "/ow:true"], logDir, "wevtutil_" + ch.Replace('/', '_'), TimeSpan.FromMinutes(10), ct);
-            o.Commands.Add(run.CommandLine);
-            if (run.ExitCode != 0 || !File.Exists(dest))
+            var (status, err) = EventLogExport.Export(ch, dest);
+            o.Commands.Add($"EvtExportLog \"{ch}\" -> {Path.GetFileName(dest)}: {status}{(err != 0 ? " (" + err + ")" : "")}");
+            if (status == EventLogExportStatus.ChannelNotFound)
             {
-                // 15007 = channel not found (e.g. Sysmon not installed): an absent source, not a failure.
-                o.Errors.Add($"{ch}: wevtutil exit {run.ExitCode}");
+                // An absent channel (Sysmon not installed, feature off on this Windows version) is an absent source, not a failure.
+                o.Errors.Add($"{ch}: indisponibil pe acest sistem (canalul nu există pe această versiune de Windows sau configurație)");
+                continue;
+            }
+            if (status != EventLogExportStatus.Exported || !File.Exists(dest))
+            {
+                o.Errors.Add($"{ch}: export eșuat ({status}, cod {err}: {EventLogExport.Describe(err)})");
                 continue;
             }
             o.Evidence.Add(ctx.Case.RegisterStored(dest, ch, "EventLog:" + ch, "evtx", TemporalType.Historical, Name, Version));
@@ -67,9 +76,18 @@ public sealed class PrefetchCollector : ICollector
         var src = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Prefetch");
         if (!ctx.IsElevated) return CollectorOutcome.NotAvailable("Prefetch: necesită drepturi de administrator", src);
         string[] files;
+        if (!Directory.Exists(src)) return CollectorOutcome.NotAvailable("Prefetch: indisponibil pe acest sistem (folderul Prefetch nu există).", src);
         try { files = Directory.GetFiles(src, "*.pf"); }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException) { return CollectorOutcome.NotAvailable(ex.Message, src); }
-        if (files.Length == 0) return new CollectorOutcome { Status = EvidenceStatus.Empty, Source = src, Errors = { "Prefetch dezactivat sau gol (frecvent pe SSD-uri cu anumite configurări)." } };
+        if (files.Length == 0)
+        {
+            // Distinguish "switched off" (EnablePrefetcher = 0) from "nothing recorded yet".
+            object? enabled = null;
+            try { enabled = Registry.GetValue(@"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters", "EnablePrefetcher", null); } catch (Exception ex) when (ex is System.Security.SecurityException or IOException or UnauthorizedAccessException) { }
+            var why = enabled is int v && v == 0 ? "Prefetch: dezactivat pe acest sistem (EnablePrefetcher = 0), deci lipsa fișierelor .pf nu dovedește că nu s-a rulat nimic."
+                    : "Prefetch: folderul există, dar este gol (nicio execuție înregistrată încă sau funcția nu produce fișiere pe acest sistem).";
+            return new CollectorOutcome { Status = EvidenceStatus.Empty, Source = src, Errors = { why } };
+        }
         var o = new CollectorOutcome { Source = src, Tool = "copy" };
         foreach (var f in files)
         {
@@ -207,5 +225,50 @@ public sealed class LiveStateCollector : ICollector
         try { a(); }
         catch (Exception ex) when (ex is ManagementException or UnauthorizedAccessException or IOException or System.Security.SecurityException)
         { errors.Add($"{what}: {ex.Message}"); }
+    }
+}
+
+/// <summary>Execution artifacts as offline hives: the SYSTEM hive (BAM, ShimCache) via reg save, and Amcache.hve with its
+/// transaction logs via a VSS copy (the live files are locked). Needs elevation.</summary>
+public sealed class ExecutionArtifactsCollector : ICollector
+{
+    public string Name => "ExecutionArtifactsCollector";
+    public string Version => "1.0";
+    public bool RequiresElevation => true;
+    public CollectionProfile Profiles => CollectionProfile.QuickAndUp;
+
+    public CollectorOutcome Collect(CollectorContext ctx, CancellationToken ct)
+    {
+        if (!ctx.IsElevated) return CollectorOutcome.NotAvailable("SYSTEM/Amcache: necesită drepturi de administrator", "registry");
+        var o = new CollectorOutcome { Source = "registry hives", Tool = "reg.exe / esentutl.exe" };
+        var logDir = Path.Combine(ctx.Case.Root, "Logs", "tools");
+
+        var sysDir = ctx.Case.RawDir("Registry");
+        var sysDest = Path.Combine(sysDir, "SYSTEM");
+        var save = ToolRunner.Run(ToolRunner.System32("reg.exe"), ["save", @"HKLM\SYSTEM", sysDest, "/y"], logDir, "reg_save_system", TimeSpan.FromMinutes(5), ct);
+        o.Commands.Add(save.CommandLine);
+        if (save.ExitCode == 0 && File.Exists(sysDest))
+            o.Evidence.Add(ctx.Case.RegisterStored(sysDest, @"HKLM\SYSTEM", "Registry:SYSTEM", "system_hive", TemporalType.CurrentSnapshot, Name, Version));
+        else o.Errors.Add($"reg save SYSTEM: exit {save.ExitCode}");
+
+        var amSrc = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "appcompat", "Programs", "Amcache.hve");
+        if (!File.Exists(amSrc)) o.Errors.Add("Amcache.hve nu există pe stație");
+        else
+        {
+            var amDir = ctx.Case.RawDir("Amcache");
+            foreach (var suffix in new[] { "", ".LOG1", ".LOG2" })
+            {
+                var src = amSrc + suffix;
+                if (!File.Exists(src)) continue;
+                var dest = Path.Combine(amDir, "Amcache.hve" + suffix);
+                var run = ToolRunner.Run(ToolRunner.System32("esentutl.exe"), ["/y", src, "/vss", "/d", dest], logDir, "esentutl_amcache" + suffix, TimeSpan.FromMinutes(5), ct);
+                o.Commands.Add(run.CommandLine);
+                if (run.ExitCode == 0 && File.Exists(dest))
+                    o.Evidence.Add(ctx.Case.RegisterStored(dest, src, "Amcache", suffix.Length == 0 ? "amcache" : "amcache_log", TemporalType.Historical, Name, Version));
+                else o.Errors.Add($"Amcache{suffix}: esentutl exit {run.ExitCode}");
+            }
+        }
+        o.Status = o.Evidence.Count == 0 ? EvidenceStatus.Failed : o.Errors.Count > 0 ? EvidenceStatus.Partial : EvidenceStatus.Success;
+        return o;
     }
 }

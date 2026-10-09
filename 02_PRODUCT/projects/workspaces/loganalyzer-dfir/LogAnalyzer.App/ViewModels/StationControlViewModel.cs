@@ -27,7 +27,7 @@ namespace LogAnalyzer.UI.ViewModels
 
         [ObservableProperty] private int _periodDays = 90;
         [ObservableProperty] private bool _stationShouldBeIsolated = AppModeContext.IsAirGapped;
-        [ObservableProperty] private string _inspector = $"{Environment.UserDomainName}\\{Environment.UserName}";
+        [ObservableProperty] private string _inspector = LogAnalyzer.Dfir.Auth.OperatorIdentity.WhoDomainQualified;
         [ObservableProperty] private string _notes = "";
         [ObservableProperty] private bool _isBusy;
         [ObservableProperty] private string _status = "Alegeți perioada și apăsați „Rulează controlul”. Colectarea doar citește; nu modifică stația.";
@@ -84,7 +84,8 @@ namespace LogAnalyzer.UI.ViewModels
         private void SaveReport()
         {
             if (_report is null) { Status = "Rulați întâi controlul."; return; }
-            var ws = LogAnalyzer.UI.Services.LiveCase.Get();
+            var ws = LogAnalyzer.UI.Services.LiveCase.GetConfirmed();
+            if (ws is null) { Status = LogAnalyzer.UI.Services.LiveCase.ScopeRequiredMessage; return; }
             var (_, pdf) = ControlReportPdf.SaveToCase(_report, ws, Inspector, Notes);
             var dlg = new SaveFileDialog { FileName = Path.GetFileName(pdf), Filter = "PDF (*.pdf)|*.pdf", Title = "Salvați o copie a raportului (originalul rămâne în caz)" };
             if (dlg.ShowDialog() == true && !string.Equals(dlg.FileName, pdf, StringComparison.OrdinalIgnoreCase))
@@ -96,7 +97,9 @@ namespace LogAnalyzer.UI.ViewModels
         [RelayCommand]
         private void OpenCaseFolder()
         {
-            var dir = Path.Combine(LogAnalyzer.UI.Services.LiveCase.Get().Root, "Control");
+            var live = LogAnalyzer.UI.Services.LiveCase.GetConfirmed();
+            if (live is null) { Status = LogAnalyzer.UI.Services.LiveCase.ScopeRequiredMessage; return; }
+            var dir = Path.Combine(live.Root, "Control");
             Directory.CreateDirectory(dir);
             Process.Start(new ProcessStartInfo("explorer.exe", dir) { UseShellExecute = true });
         }
