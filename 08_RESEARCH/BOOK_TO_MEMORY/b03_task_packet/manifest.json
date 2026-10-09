@@ -2,7 +2,7 @@
   "schema": "b2m-b03-task-packet/1",
   "study": "B03/B05 pre-registered with/without-note ablation",
   "preregistration": "08_RESEARCH/BOOK_TO_MEMORY/PREREGISTRATION_B03_B05.md",
-  "preregistration_sha256": "0691cf54b11a3e251222da6e38f85747b855e14462c981d56af3c271e53a2ca9",
+  "preregistration_sha256": "2bb2b21cef819be244aae157a6dda42bd98408df5e23beac8c9aee76fd8eae21",
   "tasks": 51,
   "trials": 204,
   "conditions": [
@@ -15,8 +15,8 @@
   "min_pairs_for_analysis": 40,
   "order_seed": 20261008,
   "template_set_hash": "b14a2c3230fd64edcee072ff0095f59a5189ddc57c687a8b6b2b6a570e9a9815",
-  "trials_sha256": "a42a764e4778928063fc071ce98bdb1342ba38c605c64ffdaf333c7ffa531a5c",
-  "tasks_sha256": "c8fb1c2173f196e6bf2aa42e9160e1168455c7dd41bf458b6aac4295a98e2576",
+  "trials_sha256": "8ff624afdbd63b458e13f1c9be7c36310c1ca3c85866db4a86fa0a29261a9105",
+  "tasks_sha256": "863830ddfad8529a6df60f1748012804be9c57df52dfe30da7aa0f572e52549e",
   "run_config_template": {
     "model_id": "TO_BE_SET_BY_ORCHESTRATOR",
     "temperature": 0.0,
