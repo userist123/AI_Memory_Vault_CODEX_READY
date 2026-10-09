@@ -316,6 +316,11 @@ public sealed class InvestigationPipeline
         int lastFindingNo = found.Select(x => x.FindingId.StartsWith("F-", StringComparison.Ordinal) && int.TryParse(x.FindingId.AsSpan(2), out var n) ? n : 0).DefaultIfEmpty(0).Max();
         found.AddRange(policyTimeline.ToFindings(() => $"F-{++lastFindingNo:D4}"));
         r.PolicyTimeline = policyTimeline;
+        // WP14b: combined sequences (control gap + media, SMB + staging + USB, portable software + archive + USB) over the findings and rows above; they add no second detection.
+        progress?.Report("Secvențe combinate");
+        int sequenceNo = found.Select(x => x.FindingId.StartsWith("F-", StringComparison.Ordinal) && int.TryParse(x.FindingId.AsSpan(2), out var n1) ? n1 : 0).DefaultIfEmpty(0).Max();
+        var sequences = SequenceRules.Run(r.Timeline, found, () => $"F-{++sequenceNo:D4}", new SequenceInput { Scope = ws.Info.Scope });
+        found.AddRange(sequences);
         var (kept, rejected) = ProvenanceBinder.BindFindings(found, ws.LoadEvidence().ToDictionary(e => e.EvidenceId, StringComparer.Ordinal));
         TimeReliability.Apply(kept, r.Timeline);
         // Finding contract: semantic type, standard state, limitations, provenance, audit trail (added beside Classification).
@@ -331,11 +336,7 @@ public sealed class InvestigationPipeline
         // WP3b: every file written below is registered in the custody chain with its SHA-256 and the evidence it rests on.
         var evidenceIds = ws.LoadEvidence().Select(e => e.EvidenceId).ToList();
         r.TimelineCsv = Path.Combine(analysisDir, "timeline.csv");
-        using (var w = new CsvWriter(r.TimelineCsv, ["TimeUtc", "TimeSemantics", "Source", "EventId", "Provider", "Host", "User", "Process", "Pid", "Path", "RemoteIp", "RemotePort", "Dns", "Summary", "Classification", "EvidenceId", "Locator", "SourceSha256", "Parser", "ParserVersion",
-                                                  "TimeRaw", "TimeConversion", "TimeZoneBasis", "TimeUncertainty", "SemanticType"]))
-            foreach (var e in r.Timeline)
-                w.WriteRow(new object?[] { e.Time.Utc?.ToString("o") ?? "", e.TimeSemantics, e.Source, e.EventId, e.Provider, e.Host, e.User, e.Process, e.Pid, e.Path, e.RemoteIp, e.RemotePort, e.Dns, e.Summary, e.Classification.ToSpec(), e.EvidenceId, e.Locator, e.SourceSha256, e.ParserId, e.ParserVersion,
-                                       e.Time.Raw, e.Time.ConversionMethod, e.TimeZoneBasis, e.TimeUncertainty, e.SemanticType.ToSpec() });
+        TimelineCsv.Write(r.TimelineCsv, r.Timeline);
         ws.RecordOutput("Analysis/timeline.csv", Producer, DfirInfo.ApplicationVersion, evidenceIds);
         r.FindingsJson = Path.Combine(analysisDir, "findings.json");
         File.WriteAllText(r.FindingsJson, SchemaVersions.WithVersion(new { r.Findings, r.Gaps, r.Collection, RejectedFindings = r.RejectedFindings.Select(x => new { x.Finding.FindingId, x.Finding.RuleId, x.Finding.Title, x.Reason }) }, SchemaVersions.Findings));
