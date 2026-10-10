@@ -1,21 +1,21 @@
 {
   "schema": "vault-route-resolution.v1",
-  "commit": "609b01bf6b6f61380b85c55f1711b4474184e730",
-  "routes": 4220,
-  "domains": 114,
+  "commit": "268f702d6496b4b595a4ec2de316013d1d96cbc2",
+  "routes": 4434,
+  "domains": 117,
   "by_uri": {
-    "self": 4220
+    "self": 4434
   },
   "by_name": {
-    "ambiguous": 222,
-    "ambiguous_self_in_candidates": 93,
-    "self": 3998
+    "ambiguous": 237,
+    "ambiguous_self_in_candidates": 102,
+    "self": 4197
   },
   "wrong_resolutions": [],
   "most_shared_names": [
     [
       "readme",
-      112
+      116
     ],
     [
       "agent",
@@ -23,11 +23,11 @@
     ],
     [
       "current",
-      9
+      10
     ],
     [
       "preregistration",
-      6
+      7
     ],
     [
       "gaps",
@@ -44,6 +44,10 @@
     [
       "security",
       3
+    ],
+    [
+      "todo",
+      2
     ],
     [
       "memory-sync",
@@ -68,11 +72,7 @@
     [
       "reconciliation_report",
       2
-    ],
-    [
-      "attribution",
-      2
     ]
   ],
-  "seconds": 678.6
+  "seconds": 399.0
 }

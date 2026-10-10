@@ -20,13 +20,13 @@ Rularea harnessului de producție sub rolul real de execuție raportează **21 d
    - Principal: `Principal.AI_AGENT`
    - Fereastră de paginare: `page_size = 5` (bugetul canonic de context spars definit în `AGENTS.md`)
    - Prag de ciclu de viață: **ACTIV** (`AGENT_LIFECYCLE_FLOOR` filtrează notele care nu sunt `ACTIVE` sau `REVIEW`)
-   - Reușite măsurate: **21 din 130** (16.15%, $CI_{95\%}$ [10.82%, 23.44%])
+   - Reușite măsurate: **24 din 130** (18.46%, $CI_{95\%}$ [12.73%, 26.00%])
 
 2. **Punctul de Operare Istoric de Referință (Brațul Om)**:
    - Principal: `Principal.HUMAN`
    - Fereastră de paginare: `page_size = 10`
    - Prag de ciclu de viață: **INACTIV** (proprietarul uman are acces neîngrădit la întregul istoric)
-   - Reușite măsurate pe starea curentă a depozitului: **38 din 130** (29.23%, $CI_{95\%}$ [22.10%, 37.56%])
+   - Reușite măsurate pe starea curentă a depozitului: **32 din 130** (24.62%, $CI_{95\%}$ [18.01%, 32.68%])
 
 3. **Descompunerea Exactă a Diferenței (Cât costă pragul de ciclu de viață vs paginarea)**:
    - **Costul ferestrei de paginare (5 vs 10)**: La același rol `Principal.HUMAN`, reducerea ferestrei de la 10 la 5 scade recall-ul de la 38 la 21 (**-17 cazuri, -13.08 puncte procentuale**). Pe rolul `Principal.AI_AGENT`, trecerea de la 10 la 5 scade recall-ul de la 37 la 21 (**-16 cazuri, -12.31 puncte procentuale**). Fereastra redusă de paginare explică peste 88% din ecart.
@@ -47,12 +47,12 @@ Din cele 130 de cazuri măsurabile, **21 sunt reușite** (16.15%), iar **109 sun
 
 | Categorie Pierdere | Ratări (N=109) | Proporție din Ratări | Interval Wilson 95% | Explicație Mecanică Cauzală |
 |:---|:---:|:---:|:---:|:---|
-| `PAGINATION_CUT` | **78** | 71.56% | [62.47%, 79.18%] | Nota a fost generată în pool-ul extins de candidați ($\le 200$), dar a fost clasată dincolo de top 5. |
-| `AGENT_LIFECYCLE_FLOOR_EXCLUDED` | **15** | 13.76% | [8.52%, 21.47%] | Nota a fost respinsă la politica de stocare deoarece ciclul său de viață este sub prag (`NORMALIZED`, `PROPOSED`, `UNVERIFIED`). |
-| `NEVER_CANDIDATE` | **13** | 11.93% | [7.10%, 19.34%] | Nota nu a fost generată ca și candidat de niciun generator lexical (scor nul sau sub limita pool-ului). |
-| `CANDIDATE_LIMIT_CUT` | **2** | 1.83% | [0.50%, 6.44%] | Nota a fost generată, dar a depășit plafonul de 200 de candidați fuzionați. |
-| `RAW_EXCLUDED` | **1** | 0.92% | [0.16%, 5.01%] | Nota de aur are starea `RAW` și a fost exclusă la politica de securitate a depozitului. |
-| `UNDETERMINED` | **0** | 0.00% | [0.00%, 3.40%] | Cauza nu a putut fi atribuită determinist uneia dintre categoriile canonice. |
+| `PAGINATION_CUT` | **70** | 66.04% | [56.60%, 74.35%] | Nota a fost generată în pool-ul extins de candidați ($\le 200$), dar a fost clasată dincolo de top 5. |
+| `AGENT_LIFECYCLE_FLOOR_EXCLUDED` | **15** | 14.15% | [8.77%, 22.04%] | Nota a fost respinsă la politica de stocare deoarece ciclul său de viață este sub prag (`NORMALIZED`, `PROPOSED`, `UNVERIFIED`). |
+| `NEVER_CANDIDATE` | **13** | 12.26% | [7.31%, 19.86%] | Nota nu a fost generată ca și candidat de niciun generator lexical (scor nul sau sub limita pool-ului). |
+| `CANDIDATE_LIMIT_CUT` | **7** | 6.60% | [3.24%, 13.01%] | Nota a fost generată, dar a depășit plafonul de 200 de candidați fuzionați. |
+| `RAW_EXCLUDED` | **1** | 0.94% | [0.17%, 5.15%] | Nota de aur are starea `RAW` și a fost exclusă la politica de securitate a depozitului. |
+| `UNDETERMINED` | **0** | 0.00% | [0.00%, 3.50%] | Cauza nu a putut fi atribuită determinist uneia dintre categoriile canonice. |
 
 > [!IMPORTANT]
 > **Raportare UNDETERMINED**: Numărul cazurilor neclasificate este **0 (0.00%)**, confortabil sub pragul de alertă de 10%. Trasabilitatea cauzală a pâlniei este de 100%.
@@ -66,14 +66,14 @@ Distribuția rangului ocupat de nota corectă în clasamentul candidaților dete
 
 | Interval Rang | Total Cazuri (N=130) | Proporție Total | Ratări (N=109) | Proporție Ratări | Semnificație pentru Re-clasare |
 |:---|:---:|:---:|:---:|:---:|:---|
-| 1–5 | **43** | 33.08% | **22** | 20.18% | Reușite imediate sau candidați generați în top 5 dar retrogradați la scorare. |
-| 6–10 | **10** | 7.69% | **10** | 9.17% | Zonă imediat recuperabilă de un reranker (efort minim de deplasare). |
-| 11–30 | **16** | 12.31% | **16** | 14.68% | Zonă realist recuperabilă de un model Cross-Encoder standard. |
+| 1–5 | **24** | 18.46% | **0** | 0.00% | Reușite imediate sau candidați generați în top 5 dar retrogradați la scorare. |
+| 6–10 | **12** | 9.23% | **12** | 11.01% | Zonă imediat recuperabilă de un reranker (efort minim de deplasare). |
+| 11–30 | **28** | 21.54% | **28** | 25.69% | Zonă realist recuperabilă de un model Cross-Encoder standard. |
 | 31–100 | **23** | 17.69% | **23** | 21.10% | Zonă dificil de recuperat; necesită funcție de scor puternic calibrată. |
-| > 100 | **9** | 6.92% | **9** | 8.26% | Zonă profundă; un reranker standard nu recuperează aceste poziții. |
+| > 100 | **14** | 10.77% | **14** | 12.84% | Zonă profundă; un reranker standard nu recuperează aceste poziții. |
 | Neclasată deloc | **29** | 22.31% | **29** | 26.61% | Notă absentă din candidați sau exclusă de politicile de securitate/ciclu de viață. |
 
-- **Rangul median pe ratările clasate**: **20.5**
+- **Rangul median pe ratările clasate**: **30**
 - **Concluzie critică**: 26 de cazuri ratate se situează în intervalul realist recuperabil (rang 6–30), iar 22 de cazuri au fost generate în top 5 dar retrogradate de funcția actuală de scorare bazată pe euristică. Un reranker adresat clasamentului 1–30 are potențialul de a recupera până la 48 de cazuri.
 
 ---
@@ -85,12 +85,12 @@ Plafonul oracol reprezintă rata de succes maximă teoretică ce ar putea fi ati
 
 | Fereastră $k$ Candidați | Cazuri Atinse | Recall Maxim Teoretic (Oracol) | Interval Wilson 95% | Interpretare Arhitecturală |
 |:---:|:---:|:---:|:---:|:---|
-| $k = 5$ | **43 / 130** | **33.08%** | [25.58%, 41.55%] | Nivelul obținut dacă top 5 candidați fuzionați ar fi păstrați fără pierderi la scorare. |
-| $k = 10$ | **53 / 130** | **40.77%** | [32.70%, 49.36%] | Plafonul atins prin extinderea ferestrei reranker-ului la top 10 candidați. |
-| $k = 20$ | **61 / 130** | **46.92%** | [38.56%, 55.47%] | Plafonul atins prin examinarea a 20 de candidați cu un reranker neural. |
-| $k = 50$ | **85 / 130** | **65.38%** | [56.87%, 73.01%] | Peste 65% din întrebări au nota de aur în primii 50 de candidați. |
-| $k = 100$ | **92 / 130** | **70.77%** | [62.44%, 77.90%] | Peste 70% din întrebări pot fi rezolvate fără modificarea generării de candidați. |
-| $k = 200$ | **99 / 130** | **76.15%** | [68.14%, 82.66%] | Plafonul absolut al pool-ului actual de candidați BM25/fuziune. |
+| $k = 5$ | **24 / 130** | **18.46%** | [12.73%, 26.00%] | Nivelul obținut dacă top 5 candidați fuzionați ar fi păstrați fără pierderi la scorare. |
+| $k = 10$ | **36 / 130** | **27.69%** | [20.72%, 35.94%] | Plafonul atins prin extinderea ferestrei reranker-ului la top 10 candidați. |
+| $k = 20$ | **49 / 130** | **37.69%** | [29.83%, 46.26%] | Plafonul atins prin examinarea a 20 de candidați cu un reranker neural. |
+| $k = 50$ | **76 / 130** | **58.46%** | [49.87%, 66.57%] | Peste 65% din întrebări au nota de aur în primii 50 de candidați. |
+| $k = 100$ | **87 / 130** | **66.92%** | [58.45%, 74.42%] | Peste 70% din întrebări pot fi rezolvate fără modificarea generării de candidați. |
+| $k = 200$ | **94 / 130** | **72.31%** | [64.06%, 79.28%] | Plafonul absolut al pool-ului actual de candidați BM25/fuziune. |
 
 > [!WARNING]
 > **Acest plafon nu este o proprietate a pool-ului de candidați și nu trebuie citat ca atare.**
@@ -98,15 +98,15 @@ Plafonul oracol reprezintă rata de succes maximă teoretică ce ar putea fi ati
 > apoi în ordinea de fuziune, deci plafonul se mișcă odată cu brațul de clasare,
 > pentru un pool identic. La $k$ = `page_size`, pe brațul care sortează chiar după
 > scorul de fuziune, definiția devine circulară și plafonul coincide cu recall-ul obținut.
-> Cifra măsurată aici, la $k=200$, este 76.15% (99/130), față de un recall obținut de 16.15% (21/130).
+> Cifra măsurată aici, la $k=200$, este 72.31% (94/130), față de un recall obținut de 18.46% (24/130).
 >
 > Plafonul independent de braț este măsurat separat, din ordinea de fuziune și numai
 > din ea, de `30_SCRIPTS/evaluation/measure_reranker_ceiling.py`; rezultatul este în
 > `07_EVALUATION/ranking_formula/reranker_ceiling.json`.
 >
 > Marja utilă pentru un reranker nu este diferența dintre recall și plafon, ci numai
-> cazurile care au nota de aur în pool sub rangul returnat: **78**. Celelalte
-> ratări sunt 15 eșecuri de generare de candidați și 16 excluderi de
+> cazurile care au nota de aur în pool sub rangul returnat: **70**. Celelalte
+> ratări sunt 20 eșecuri de generare de candidați și 16 excluderi de
 > politică, pe care reorganizarea listei nu le atinge.
 
 ---
@@ -132,17 +132,17 @@ Pentru cele 13 cazuri în care nota de aur nu a acces niciodată în lista de ca
 
 | Clasă | Total | Reușite | Recall (%) | Interval Wilson 95% | `NEVER_CANDIDATE` | `PAGINATION_CUT` | `FLOOR_EXCLUDED` |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `direct` | 60 | **7** | **11.67%** | [5.77%, 22.18%] | 11 | 32 | 9 |
-| `multi_hop` | 40 | **8** | **20.00%** | [10.50%, 34.76%] | 1 | 23 | 6 |
-| `conceptual` | 30 | **6** | **20.00%** | [9.51%, 37.31%] | 1 | 23 | 0 |
+| `direct` | 60 | **15** | **25.00%** | [15.78%, 37.23%] | 11 | 22 | 9 |
+| `multi_hop` | 40 | **2** | **5.00%** | [1.38%, 16.50%] | 1 | 26 | 6 |
+| `conceptual` | 30 | **7** | **23.33%** | [11.79%, 40.93%] | 1 | 22 | 0 |
 
 ### 6.2. Defalcare pe Limbă și Analiza Diagnostică a Diacriticelor
 #### [Punct de operare: Principal.AI_AGENT, page_size=5, prag ciclu de viață ACTIV]
 
 | Limbă | Total Măsurabil | Total Benchmark | Reușite | Recall (%) | Interval Wilson 95% | `NEVER_CANDIDATE` | `PAGINATION_CUT` |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `en` | 69 | 86 | **12** | **17.39%** | [10.24%, 27.98%] | 9 | 41 |
-| `ro` | 61 | 74 | **9** | **14.75%** | [7.96%, 25.72%] | 4 | 37 |
+| `en` | 69 | 86 | **19** | **27.54%** | [18.39%, 39.05%] | 9 | 34 |
+| `ro` | 61 | 74 | **5** | **8.20%** | [3.55%, 17.79%] | 4 | 36 |
 
 #### Diagnosticul Diacriticelor Românești: Mărime Corpus vs Normalizare Tokenizer
 Investigația empirică directă asupra stocării și pipeline-ului lexical relevă:
@@ -160,9 +160,9 @@ Investigația empirică directă asupra stocării și pipeline-ului lexical rele
 
 | Stare Ciclu de Viață | Total Note | Reușite | Recall (%) | Interval Wilson 95% | `PAGINATION_CUT` | `FLOOR_EXCLUDED` | `NEVER_CANDIDATE` |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| `ACTIVE` | 17 | **5** | **29.41%** | [13.28%, 53.13%] | 9 | 0 | 1 |
+| `ACTIVE` | 17 | **6** | **35.29%** | [17.31%, 58.70%] | 7 | 0 | 1 |
 | `NORMALIZED` | 3 | **0** | **0.00%** | [0.00%, 56.15%] | 0 | 3 | 0 |
-| `REVIEW` | 88 | **16** | **18.18%** | [11.51%, 27.51%] | 69 | 0 | 3 |
+| `REVIEW` | 88 | **18** | **20.45%** | [13.35%, 30.03%] | 63 | 0 | 3 |
 | `UNKNOWN` | 21 | **0** | **0.00%** | [0.00%, 15.46%] | 0 | 12 | 9 |
 | `raw` | 1 | **0** | **0.00%** | [0.00%, 79.35%] | 0 | 0 | 0 |
 
@@ -173,10 +173,10 @@ Investigația empirică directă asupra stocării și pipeline-ului lexical rele
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | `UNKNOWN` | 9 | **0** | **0.00%** | [0.00%, 29.91%] | 0 | 0 | 9 |
 | `core` | 12 | **0** | **0.00%** | [0.00%, 24.25%] | 0 | 12 | 0 |
-| `knowledge` | 81 | **16** | **19.75%** | [12.54%, 29.70%] | 58 | 3 | 3 |
+| `knowledge` | 81 | **14** | **17.28%** | [10.58%, 26.95%] | 56 | 3 | 3 |
 | `ontology_definition` | 1 | **0** | **0.00%** | [0.00%, 79.35%] | 0 | 0 | 0 |
-| `procedure` | 16 | **4** | **25.00%** | [10.18%, 49.50%] | 11 | 0 | 1 |
-| `project` | 10 | **1** | **10.00%** | [1.79%, 40.42%] | 8 | 0 | 0 |
+| `procedure` | 16 | **7** | **43.75%** | [23.10%, 66.82%] | 7 | 0 | 1 |
+| `project` | 10 | **3** | **30.00%** | [10.78%, 60.32%] | 6 | 0 | 0 |
 | `standard` | 1 | **0** | **0.00%** | [0.00%, 79.35%] | 1 | 0 | 0 |
 
 ### 6.5. Corecția Holm–Bonferroni și Declarația de Non-Independență
@@ -186,11 +186,11 @@ Investigația empirică directă asupra stocării și pipeline-ului lexical rele
 |:---|:---:|:---:|:---:|:---|
 | `H1_never_candidate_dominant` | `0.000000` | **`0.000000`** | $\alpha = 0.05$ | SEMNIFICATIV ($p < 0.05$) |
 | `H2_multihop_never_candidate_60pct` | `0.000000` | **`0.000000`** | $\alpha = 0.05$ | SEMNIFICATIV ($p < 0.05$) |
-| `H3_ro_recall_inferior_to_en` | `0.812392` | **`1.000000`** | $\alpha = 0.05$ | NESEMNIFICATIV |
-| `H4_hits_in_top3_75pct` | `0.632580` | **`1.000000`** | $\alpha = 0.05$ | NESEMNIFICATIV |
-| `Class_direct_vs_multihop` | `0.268274` | **`1.000000`** | $\alpha = 0.05$ | NESEMNIFICATIV |
-| `Class_direct_vs_conceptual` | `0.345345` | **`1.000000`** | $\alpha = 0.05$ | NESEMNIFICATIV |
-| `Class_multihop_vs_conceptual` | `1.000000` | **`1.000000`** | $\alpha = 0.05$ | NESEMNIFICATIV |
+| `H3_ro_recall_inferior_to_en` | `0.005973` | **`0.029867`** | $\alpha = 0.05$ | SEMNIFICATIV ($p < 0.05$) |
+| `H4_hits_in_top3_75pct` | `0.998997` | **`1.000000`** | $\alpha = 0.05$ | NESEMNIFICATIV |
+| `Class_direct_vs_multihop` | `0.012799` | **`0.051195`** | $\alpha = 0.05$ | NESEMNIFICATIV |
+| `Class_direct_vs_conceptual` | `1.000000` | **`1.000000`** | $\alpha = 0.05$ | NESEMNIFICATIV |
+| `Class_multihop_vs_conceptual` | `0.032442` | **`0.097325`** | $\alpha = 0.05$ | NESEMNIFICATIV |
 
 > [!WARNING]
 > **Declarație de Limitare Metodologică (Non-independența H1 și H2)**:  
@@ -203,12 +203,12 @@ Investigația empirică directă asupra stocării și pipeline-ului lexical rele
 
 | Etapă Pipeline | Reușite: Medie ± Std (ms) | Reușite: Mediană (ms) | Ratări: Medie ± Std (ms) | Ratări: Mediană (ms) | Impact Economic |
 |:---|:---:|:---:|:---:|:---:|:---|
-| `query_validation` | 0.012 ± 0.002 | 0.012 | 0.013 ± 0.004 | 0.012 | Etapă neglijabilă (< 0.1 ms) |
-| `classification` | 0.050 ± 0.008 | 0.050 | 0.055 ± 0.048 | 0.049 | Etapă neglijabilă (< 0.1 ms) |
-| `policy_and_retrieval` | 350.684 ± 91.651 | 378.106 | 354.331 ± 85.902 | 376.223 | **Domină 85% din execuție** (identică între reușite și ratări). |
-| `scoring` | 62.304 ± 26.773 | 76.833 | 47.287 ± 29.174 | 35.985 | Scorarea durează cu ~15 ms mai mult la reușite din cauza densității semnalelor. |
-| `pagination` | 0.180 ± 0.072 | 0.166 | 0.163 ± 0.043 | 0.166 | Etapă neglijabilă (< 0.1 ms) |
-| `context_pack` | 0.695 ± 0.158 | 0.652 | 0.638 ± 0.100 | 0.612 | Asamblarea contextului final (< 1 ms). |
+| `query_validation` | 0.011 ± 0.001 | 0.011 | 0.011 ± 0.002 | 0.011 | Etapă neglijabilă (< 0.1 ms) |
+| `classification` | 0.048 ± 0.005 | 0.048 | 0.054 ± 0.031 | 0.050 | Etapă neglijabilă (< 0.1 ms) |
+| `policy_and_retrieval` | 342.972 ± 90.036 | 368.851 | 347.859 ± 76.641 | 365.964 | **Domină 85% din execuție** (identică între reușite și ratări). |
+| `scoring` | 30.055 ± 20.694 | 20.169 | 42.709 ± 24.159 | 40.064 | Scorarea durează cu ~15 ms mai mult la reușite din cauza densității semnalelor. |
+| `pagination` | 0.273 ± 0.073 | 0.279 | 0.281 ± 0.066 | 0.287 | Etapă neglijabilă (< 0.1 ms) |
+| `context_pack` | 0.727 ± 0.089 | 0.709 | 0.682 ± 0.107 | 0.678 | Asamblarea contextului final (< 1 ms). |
 
 > [!NOTE]
 > **Concluzia costului eșecului**: Etapa `policy_and_retrieval` domină masiv și cvasi-identic ambele categorii (~350.68 ms la reușite vs ~354.33 ms la ratări). **Eșecul nu este mai costisitor computațional decât succesul; este pur și simplu inutil.**
@@ -220,16 +220,16 @@ Investigația empirică directă asupra stocării și pipeline-ului lexical rele
 
 | Metrică | Brațul de Referință HUMAN (p=10) | Brațul de Control HUMAN (p=5) | Brațul de Producție AI_AGENT (p=5) |
 |:---|:---:|:---:|:---:|
-| **Reușite (Hits)** | **38 / 130** | **21 / 130** | **21 / 130** |
-| **Context Recall (%)** | **29.23%** | **16.15%** | **16.15%** |
-| **Interval Wilson 95%** | [22.10%, 37.56%] | [10.82%, 23.44%] | [10.82%, 23.44%] |
-| `PAGINATION_CUT` | 60 (65.2%) | 77 (70.6%) | 78 (71.6%) |
-| `CANDIDATE_LIMIT_CUT` | 17 (18.5%) | 17 (15.6%) | 2 (1.8%) |
-| `FLOOR_EXCLUDED` | 0 (0.0%) | 0 (0.0%) | 15 (13.8%) |
-| `NEVER_CANDIDATE` | 14 (15.2%) | 14 (12.8%) | 13 (11.9%) |
-| `RAW_EXCLUDED` | 1 (1.1%) | 1 (0.9%) | 1 (0.9%) |
+| **Reușite (Hits)** | **32 / 130** | **22 / 130** | **24 / 130** |
+| **Context Recall (%)** | **24.62%** | **16.92%** | **18.46%** |
+| **Interval Wilson 95%** | [18.01%, 32.68%] | [11.45%, 24.30%] | [12.73%, 26.00%] |
+| `PAGINATION_CUT` | 83 (84.7%) | 93 (86.1%) | 70 (66.0%) |
+| `CANDIDATE_LIMIT_CUT` | 0 (0.0%) | 0 (0.0%) | 7 (6.6%) |
+| `FLOOR_EXCLUDED` | 0 (0.0%) | 0 (0.0%) | 15 (14.1%) |
+| `NEVER_CANDIDATE` | 14 (14.3%) | 14 (13.0%) | 13 (12.3%) |
+| `RAW_EXCLUDED` | 1 (1.0%) | 1 (0.9%) | 1 (0.9%) |
 | `UNDETERMINED` | 0 (0.0%) | 0 (0.0%) | 0 (0.0%) |
-| **Rang Median pe Ratări** | **33.0** | **30** | **20.5** |
+| **Rang Median pe Ratări** | **39** | **32** | **30** |
 
 ---
 
@@ -238,10 +238,10 @@ Investigația empirică directă asupra stocării și pipeline-ului lexical rele
 
 | Ipoteză | Enunț Preînregistrat | Măsurătoare Empirică | $p$ Brut | $p$ Ajustat Holm | Verdict |
 |:---:|:---|:---:|:---:|:---:|:---:|
-| **H1** | Categoria dominantă a ratărilor este `NEVER_CANDIDATE` ($\ge 40\%$). | **13/109 (11.93%)**, CI [7.10%, 19.34%] | `0.000000` | `0.000000` | **INFIRMATĂ** |
-| **H2** | Clasa `multi_hop` este dominată de `NEVER_CANDIDATE` ($\ge 60\%$). | **1/32 (3.12%)**, CI [0.55%, 15.74%] | `0.000000` | `0.000000` | **INFIRMATĂ** |
-| **H3** | Interogările în limba română au recall inferior celor în engleză ($p < 0.05$). | EN: 12/69 (17.39%) vs RO: 9/61 (14.75%) (dif: +2.64 pp) | `0.812392` | `1.000000` | **INFIRMATĂ** |
-| **H4** | Reușitele sunt puternic concentrate la vârful clasamentului (Top 3 $\ge 75\%$). | **16/21 (76.19%)**, CI [54.91%, 89.37%] | `0.632580` | `1.000000` | **CONFIRMATĂ** |
+| **H1** | Categoria dominantă a ratărilor este `NEVER_CANDIDATE` ($\ge 40\%$). | **13/106 (12.26%)**, CI [7.31%, 19.86%] | `0.000000` | `0.000000` | **INFIRMATĂ** |
+| **H2** | Clasa `multi_hop` este dominată de `NEVER_CANDIDATE` ($\ge 60\%$). | **1/38 (2.63%)**, CI [0.47%, 13.49%] | `0.000000` | `0.000000` | **INFIRMATĂ** |
+| **H3** | Interogările în limba română au recall inferior celor în engleză ($p < 0.05$). | EN: 19/69 (27.54%) vs RO: 5/61 (8.20%) (dif: +19.34 pp) | `0.005973` | `0.029867` | **CONFIRMATĂ** |
+| **H4** | Reușitele sunt puternic concentrate la vârful clasamentului (Top 3 $\ge 75\%$). | **23/24 (95.83%)**, CI [79.76%, 99.26%] | `0.998997` | `1.000000` | **CONFIRMATĂ** |
 
 ### Analiza Verdictelor:
 - **H1 este infirmată categoric**: `NEVER_CANDIDATE` reprezintă doar 11.93% din eșecuri (13/109). Categoria masiv dominantă este `PAGINATION_CUT` (71.56%).
@@ -256,8 +256,8 @@ Investigația empirică directă asupra stocării și pipeline-ului lexical rele
 
 | Criteriu Decizional Preînregistrat | Condiție Formală | Valoare Măsurată Empiric | Verdict Decizional |
 |:---|:---|:---:|:---:|
-| **1. Adoptare Reranker (Problema de clasare)** | $\ge 40\%$ (`PAGINATION_CUT` + `CANDIDATE_LIMIT_CUT`) **ȘI** rang median ratări $\le 30$ | **73.39%** $\ge 40\%$ **ȘI** rang median = **20.5** $\le 30$ | **ADOPTAT (Problema este de clasare / reordonare)** |
-| **2. Adoptare Dense Retrieval (Problema generării)** | $\ge 40\%$ `NEVER_CANDIDATE` | **11.93%** $< 40\%$ | **RESPINS ca blocaj primar (NEVER_CANDIDATE este sub 40%)** |
+| **1. Adoptare Reranker (Problema de clasare)** | $\ge 40\%$ (`PAGINATION_CUT` + `CANDIDATE_LIMIT_CUT`) **ȘI** rang median ratări $\le 30$ | **72.64%** $\ge 40\%$ **ȘI** rang median = **30** $\le 30$ | **ADOPTAT (Problema este de clasare / reordonare)** |
+| **2. Adoptare Dense Retrieval (Problema generării)** | $\ge 40\%$ `NEVER_CANDIDATE` | **12.26%** $< 40\%$ | **RESPINS ca blocaj primar (NEVER_CANDIDATE este sub 40%)** |
 | **3. Inconcludență** | Ambele categorii sub 40% | Categoria de clasare întrunește 73.39% | **INFIRMAT (Decizie clară)** |
 
 > [!IMPORTANT]
@@ -269,7 +269,7 @@ Investigația empirică directă asupra stocării și pipeline-ului lexical rele
 
 Pentru rigoare epistemologică și protecția integrității deciziilor viitoare, consemnăm explicit limitele interpretative ale acestor măsurători:
 
-1. **Nu se poate concluziona că un reranker va atinge în practică plafonul de 76.15%**: Plafonul oracol presupune un judecător omniscient. Modelele reale de reranking (cum ar fi BGE-Reranker sau MiniLM) au propriile rate de eroare și deplasare negativă a candidaților corecți.
+1. **Nu se poate concluziona că un reranker va atinge în practică plafonul de 72.31%**: Plafonul oracol presupune un judecător omniscient. Modelele reale de reranking (cum ar fi BGE-Reranker sau MiniLM) au propriile rate de eroare și deplasare negativă a candidaților corecți.
 2. **Nu se poate concluziona că Dense Retrieval este lipsit de valoare**: Deși nu este blocajul majoritar în prezent, cele 9 cazuri de nepotrivire totală de vocabular (`lexical_overlap == 0`) nu pot fi rezolvate de niciun reranker pe candidați BM25. Dense Retrieval va rămâne necesar ca a doua etapă de optimizare odată ce problema de clasare este rezolvată.
 3. **Nu se poate extrapola comportamentul la un corpus deschis / neindexat**: Măsurătorile reflectă exact compoziția actuală a celor 969 de note din depozit. Modificări majore în ontologie sau adăugarea de sute de note noi pot schimba dinamica densității lexicale.
 4. **Nu se poate concluziona că limba română este mai dificilă pentru modelele de limbaj**: Deficitul observat este strict un artefact mecanic de tokenizare regex în codul Python (`TOKEN_RE`), nu o incapacitate cognitivă a algoritmilor.
