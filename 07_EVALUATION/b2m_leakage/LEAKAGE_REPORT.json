@@ -5626,94 +5626,94 @@
   ],
   "sets": [
     {
-      "file_sha256": "59dc6b0d6b00bf578824c593f7e77dae69a234ddc9e330429bd8354eec227114",
+      "file_sha256": "07fa07e00d08a31642f4e721b6d414e3fcf821e178d8ff0876c6bb82350b2619",
       "items": 28,
       "name": "h1_development",
-      "path": "/home/user/AI_Memory_Vault_CODEX_READY/.claude/worktrees/agent-a8727335500d8640e/08_RESEARCH/BOOK_TO_MEMORY/h1_cases.json",
+      "path": "C:\\Users\\Marius\\Documents\\Codex\\AI_Memory_Vault_CODEX_READY\\08_RESEARCH\\BOOK_TO_MEMORY\\h1_cases.json",
       "role": "scenario"
     },
     {
-      "file_sha256": "59dc6b0d6b00bf578824c593f7e77dae69a234ddc9e330429bd8354eec227114",
+      "file_sha256": "07fa07e00d08a31642f4e721b6d414e3fcf821e178d8ff0876c6bb82350b2619",
       "items": 14,
       "name": "h1_calibration",
-      "path": "/home/user/AI_Memory_Vault_CODEX_READY/.claude/worktrees/agent-a8727335500d8640e/08_RESEARCH/BOOK_TO_MEMORY/h1_cases.json",
+      "path": "C:\\Users\\Marius\\Documents\\Codex\\AI_Memory_Vault_CODEX_READY\\08_RESEARCH\\BOOK_TO_MEMORY\\h1_cases.json",
       "role": "scenario"
     },
     {
-      "file_sha256": "59dc6b0d6b00bf578824c593f7e77dae69a234ddc9e330429bd8354eec227114",
+      "file_sha256": "07fa07e00d08a31642f4e721b6d414e3fcf821e178d8ff0876c6bb82350b2619",
       "items": 28,
       "name": "h1_held_out",
-      "path": "/home/user/AI_Memory_Vault_CODEX_READY/.claude/worktrees/agent-a8727335500d8640e/08_RESEARCH/BOOK_TO_MEMORY/h1_cases.json",
+      "path": "C:\\Users\\Marius\\Documents\\Codex\\AI_Memory_Vault_CODEX_READY\\08_RESEARCH\\BOOK_TO_MEMORY\\h1_cases.json",
       "role": "heldout"
     },
     {
       "file_sha256": "90702a1a773ae46de2c14923b98d4ca99f23b7b11530f7535a1611e8fdeddd39",
       "items": 12,
       "name": "heldout_v2_dev",
-      "path": "/home/user/AI_Memory_Vault_CODEX_READY/.claude/worktrees/agent-a8727335500d8640e/07_EVALUATION/heldout_retrieval_benchmark_v2/dev.json",
+      "path": "C:\\Users\\Marius\\Documents\\Codex\\AI_Memory_Vault_CODEX_READY\\07_EVALUATION\\heldout_retrieval_benchmark_v2\\dev.json",
       "role": "scenario"
     },
     {
       "file_sha256": "0222d5e858dfca5bbae6db4559eafe0d43b133380a912664aaa7e4ea6c0d8418",
       "items": 32,
       "name": "heldout_v2_heldout",
-      "path": "/home/user/AI_Memory_Vault_CODEX_READY/.claude/worktrees/agent-a8727335500d8640e/07_EVALUATION/heldout_retrieval_benchmark_v2/heldout.json",
+      "path": "C:\\Users\\Marius\\Documents\\Codex\\AI_Memory_Vault_CODEX_READY\\07_EVALUATION\\heldout_retrieval_benchmark_v2\\heldout.json",
       "role": "heldout"
     },
     {
-      "file_sha256": "793ed0766775440d9d08f748c311db4c5cbe6526360d6b387a5a8953eed8ee50",
+      "file_sha256": "918a4c6c1c182f3d735444c35d81cfb5198b28dd2f5ab1eb27f5568bca0b62dc",
       "items": 12,
       "name": "heldout_v1_dev",
-      "path": "/home/user/AI_Memory_Vault_CODEX_READY/.claude/worktrees/agent-a8727335500d8640e/07_EVALUATION/heldout_retrieval_benchmark_v1/dev.json",
+      "path": "C:\\Users\\Marius\\Documents\\Codex\\AI_Memory_Vault_CODEX_READY\\07_EVALUATION\\heldout_retrieval_benchmark_v1\\dev.json",
       "role": "scenario"
     },
     {
-      "file_sha256": "242c400222509a2d58deb999e8c655c75b000f3abe9b5a860a1d96ea2db9e00f",
+      "file_sha256": "936752b0368fb9ebf6b4103a7a251e1a68a75884bdb321523bb17501804b25cd",
       "items": 36,
       "name": "heldout_v1_heldout",
-      "path": "/home/user/AI_Memory_Vault_CODEX_READY/.claude/worktrees/agent-a8727335500d8640e/07_EVALUATION/heldout_retrieval_benchmark_v1/heldout.json",
+      "path": "C:\\Users\\Marius\\Documents\\Codex\\AI_Memory_Vault_CODEX_READY\\07_EVALUATION\\heldout_retrieval_benchmark_v1\\heldout.json",
       "role": "heldout"
     },
     {
       "file_sha256": "eeb53822ae5f022df89290d6fca789c1d4387b7572ed70103a7c08aae5b57eaa",
       "items": 160,
       "name": "retrieval_v3",
-      "path": "/home/user/AI_Memory_Vault_CODEX_READY/.claude/worktrees/agent-a8727335500d8640e/07_EVALUATION/retrieval_benchmark_v3/retrieval_benchmark_v3.json",
+      "path": "C:\\Users\\Marius\\Documents\\Codex\\AI_Memory_Vault_CODEX_READY\\07_EVALUATION\\retrieval_benchmark_v3\\retrieval_benchmark_v3.json",
       "role": "heldout"
     },
     {
-      "file_sha256": "a5662e4d896007630a291dd6fb0806e546dcdb27d2c757fc0f8d623daeffd7fd",
+      "file_sha256": "cca389df1431db017853755affe8b6d4597b3112f785a6b23cc9986c33aa823a",
       "items": 30,
       "name": "model_memory_challenge",
-      "path": "/home/user/AI_Memory_Vault_CODEX_READY/.claude/worktrees/agent-a8727335500d8640e/07_EVALUATION/model_memory_benchmark_v1/retrieval_challenge_cases.jsonl",
+      "path": "C:\\Users\\Marius\\Documents\\Codex\\AI_Memory_Vault_CODEX_READY\\07_EVALUATION\\model_memory_benchmark_v1\\retrieval_challenge_cases.jsonl",
       "role": "scenario"
     },
     {
-      "file_sha256": "ab5a23b11a7bd6551a4dd91b0348b35ba30db6db0d361137fd29b2b71c6e3548",
+      "file_sha256": "82d4108fe91437a8f6a76f33f138b2c355afd27b833985102687a0d7d254567e",
       "items": 10,
       "name": "golden_tasks",
-      "path": "/home/user/AI_Memory_Vault_CODEX_READY/.claude/worktrees/agent-a8727335500d8640e/07_EVALUATION/golden_memory_effectiveness_v1/golden_tasks.json",
+      "path": "C:\\Users\\Marius\\Documents\\Codex\\AI_Memory_Vault_CODEX_READY\\07_EVALUATION\\golden_memory_effectiveness_v1\\golden_tasks.json",
       "role": "scenario"
     },
     {
-      "file_sha256": "07b4a338619672cfd1f8ef44319c29cc61cc8c87d2770565f05499f7c087796d",
+      "file_sha256": "693874ca58aa61a6b16a6388e84eaa81e7c17df0fc6f05372e9609fbb9663934",
       "items": 22,
       "name": "curriculum_psychology_ch08",
-      "path": "/home/user/AI_Memory_Vault_CODEX_READY/.claude/worktrees/agent-a8727335500d8640e/07_EVALUATION/curriculum/openstax_ch08_frozen_test_set.json",
+      "path": "C:\\Users\\Marius\\Documents\\Codex\\AI_Memory_Vault_CODEX_READY\\07_EVALUATION\\curriculum\\openstax_ch08_frozen_test_set.json",
       "role": "scenario"
     },
     {
-      "file_sha256": "7574dfc34c19137bb789afe85b07bba36da3eae00495eb0eb6b7dd34158936dd",
+      "file_sha256": "6555da298c645c4f00a2b6b3b32987ba12e951004133950e578aa472d1b07a86",
       "items": 22,
       "name": "curriculum_statistics_ch08",
-      "path": "/home/user/AI_Memory_Vault_CODEX_READY/.claude/worktrees/agent-a8727335500d8640e/07_EVALUATION/curriculum/openstax_statistics_frozen_test_set.json",
+      "path": "C:\\Users\\Marius\\Documents\\Codex\\AI_Memory_Vault_CODEX_READY\\07_EVALUATION\\curriculum\\openstax_statistics_frozen_test_set.json",
       "role": "scenario"
     },
     {
-      "file_sha256": "c8fb1c2173f196e6bf2aa42e9160e1168455c7dd41bf458b6aac4295a98e2576",
+      "file_sha256": "863830ddfad8529a6df60f1748012804be9c57df52dfe30da7aa0f572e52549e",
       "items": 51,
       "name": "b03_tasks",
-      "path": "/home/user/AI_Memory_Vault_CODEX_READY/.claude/worktrees/agent-a8727335500d8640e/08_RESEARCH/BOOK_TO_MEMORY/b03_task_packet/scoring/tasks.json",
+      "path": "C:\\Users\\Marius\\Documents\\Codex\\AI_Memory_Vault_CODEX_READY\\08_RESEARCH\\BOOK_TO_MEMORY\\b03_task_packet\\scoring\\tasks.json",
       "role": "scenario"
     }
   ],
