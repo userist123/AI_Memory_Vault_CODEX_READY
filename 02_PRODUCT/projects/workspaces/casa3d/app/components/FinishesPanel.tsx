@@ -1,0 +1,196 @@
+'use client';
+// Finisajele unei camere, ca la un designer: pardoseala și modul ei de așezare, pereții (vopsea, faianță, placări pe fiecare latură),
+// tavanul (drept, fals, scafă luminoasă, cornișă, spoturi), plinta și iluminatul — cu costul camerei și avertismentele tehnice.
+import { useMemo } from 'react';
+import type { Snapshot, MaterialsCatalog, RoomFinishes, Room, Material, WallFeature, WallFeatureKind, FloorPattern, Catalog, WindowTreatment } from '@/core/types';
+import { finishesOf, roomGeometry, computeBOQ } from '@/core/boq';
+import { floorOfRoom } from '@/core/levels';
+import { bandsOverlap, defaultLayout, PATTERNS, SIDES, FEATURE_CATEGORY, layoutOf, materialOf, sideGeometry, ceilingOf, clearHeight, finishIssues, pieceSizeCm, FINISH_RULES } from '@/core/finishes';
+import { formatMoney, formatArea, formatLength } from '@/core/format';
+import { normalizeHex } from '@/core/appearance';
+import { lightReport } from '@/core/light-design';
+import { roomWindows, curtainPlan, blindPlan, TEXTILE_RULES } from '@/core/textiles';
+import { kitchenOf, kitchenRun, kitchenQuantities, kitchenIssues } from '@/core/kitchen';
+import { bathOf, bathIssues, METAL_COLOR, TILE_ZONE_M } from '@/core/bath';
+import { fixtureIssues, fixtureCount, FIXTURE_KINDS, FIXTURE_ANCHORS } from '@/core/fixtures';
+import { usePrefs } from '@/lib/prefs';
+
+const KINDS = Object.keys(FEATURE_CATEGORY) as WallFeatureKind[];
+
+export default function FinishesPanel({ room, snap, cat, mc, cur, onFinish }: { room: Room; snap: Snapshot; cat: Catalog; mc: MaterialsCatalog; cur: string; onFinish(p: Partial<RoomFinishes>): void }){
+  const { t, lang, units } = usePrefs();
+  const f = finishesOf(snap, room), g = roomGeometry(snap, room), fl = floorOfRoom(snap, room.id), wet = room.type === 'baie' || room.type === 'bucatarie';
+  const by = (...c: Material['category'][]) => mc.materials.filter(m => c.includes(m.category));
+  const unitLabel = (u: string) => u === 'm2' ? 'm²' : u === 'buc' ? t('fin.unit.pc') : u;
+  const opt = (m: Material) => <option key={m.id} value={m.id}>{m.name} · {formatMoney(m.unitPrice, cur, lang)}/{unitLabel(m.unit)}</option>;
+  const fm = materialOf(mc, f.floor), lay = layoutOf(f, fm), tile = fm?.category === 'floor_tile', c = ceilingOf(f);
+  const setLayout = (p: Partial<typeof lay>) => onFinish({ floorLayout: { ...lay, ...p } });
+  const features = f.wallFeatures || [];
+  const setFeature = (i: number, p: Partial<WallFeature>) => onFinish({ wallFeatures: features.map((w, k) => k === i ? { ...w, ...p } : w) });
+  const firstOf = (kind: WallFeatureKind) => by(FEATURE_CATEGORY[kind])[0]?.id || '';
+  const freeSide = SIDES.find(s => !features.some(w => w.side === s));
+  const setCeiling = (p: Partial<NonNullable<RoomFinishes['ceiling']>>) => onFinish({ ceiling: { type: c.type, ...(f.ceiling || {}), ...p } });
+  // costul finisajelor acestei camere, din același BOQ ca bugetul (materiale + manoperă estimată)
+  const cost = useMemo(() => { const b = computeBOQ(snap, cat, mc), items = b.items.filter(i => i.roomId === room.id && (i.category === 'finishes' || i.category === 'lighting' || i.category === 'textiles'));
+    return { mat: items.reduce((a, i) => a + (i.total ?? 0), 0), lab: b.labor.filter(l => l.roomId === room.id).reduce((a, l) => a + l.expected, 0) }; }, [snap, cat, mc, room.id]);
+  const issues = finishIssues(snap, mc, fl, room, f), light = lightReport(mc, fl, room, f), wins = roomWindows(fl, room);
+  const run = kitchenRun(snap, cat, room.id), ks = kitchenOf(f), kq = run ? kitchenQuantities(run, ks, materialOf(mc, ks.countertop)) : null, kIss = kitchenIssues(snap, cat, mc, room.id, f);
+  const setK = (p: Partial<NonNullable<RoomFinishes['kitchen']>>) => onFinish({ kitchen: { ...(f.kitchen || {}), ...p } });
+  const fxs = f.fixtures || [], fxIss = fixtureIssues(snap, cat, mc, room, f), setFx = (i: number, p: Partial<NonNullable<RoomFinishes['fixtures']>[number]>) => onFinish({ fixtures: fxs.map((x, k) => k === i ? { ...x, ...p } : x) });
+  const FX_CATS = { pendant: ['pendant', 'lighting'], sconce: ['wall_light'], track: ['led_profile', 'spot'] } as const;
+  const bs = bathOf(f), bIss = bathIssues(snap, mc, room, f), setB = (p: Partial<NonNullable<RoomFinishes['bath']>>) => onFinish({ bath: { ...(f.bath || {}), ...p } });
+  const treat = (id: string) => (f.windows || []).find(t => t.openingId === id) ?? { openingId: id };
+  const setTreat = (id: string, p: Partial<WindowTreatment>) => onFinish({ windows: [...(f.windows || []).filter(t => t.openingId !== id), { ...treat(id), ...p }] });
+  const sideLen = (s: WallFeature['side']) => formatLength(sideGeometry(fl, room, s).lengthM, units, lang);
+  const patternOk = (p: FloorPattern) => tile ? p !== 'herringbone' && p !== 'chevron' || pieceSizeCm(fm)[0] >= 2 * pieceSizeCm(fm)[1] : true;
+
+  return (<div className="finishes">
+    <h4>{t('editor.finishes')}</h4>
+    <div className="prov">{t('editor.finishSummary', { floor: formatArea(g.floorArea, units, lang), walls: formatArea(g.wallNet, units, lang), ceiling: formatArea(g.ceiling, units, lang), perimeter: formatLength(g.perimeter, units, lang) })}</div>
+    <div className="prov" role="status">{t('fin.roomCost', { mat: formatMoney(cost.mat, cur, lang), lab: formatMoney(cost.lab, cur, lang) })}</div>
+    {issues.length > 0 && <div>{issues.map((i, k) => <div key={k} className="issue WARNING">{t(i.key, { ...i.vars, ...(i.vars?.pattern ? { pattern: t(`fin.pattern.${i.vars.pattern}`) } : {}), ...(i.vars?.side && i.vars.side !== '-' ? { side: t(`fin.side.${i.vars.side}`) } : {}) })}</div>)}</div>}
+
+    <fieldset className="fin-group"><legend>{t('fin.floor')}</legend>
+      <label className="f"><span>{t('editor.floorFinish')}</span><select value={f.floor} onChange={e => onFinish({ floor: e.target.value, floorLayout: defaultLayout(materialOf(mc, e.target.value)) })}>
+        <optgroup label={t('fin.parquet')}>{by('parquet').map(opt)}</optgroup><optgroup label={t('fin.tiles')}>{by('floor_tile').map(opt)}</optgroup></select></label>
+      <div className="grid2">
+        <label className="f"><span>{t('fin.pattern')}</span><select value={lay.pattern} onChange={e => setLayout({ pattern: e.target.value as FloorPattern })}>
+          {PATTERNS.filter(patternOk).map(p => <option key={p} value={p}>{t(`fin.pattern.${p}`)}</option>)}</select></label>
+        <label className="f"><span>{t('fin.direction')}</span><select value={lay.angle ?? 0} onChange={e => setLayout({ angle: Number(e.target.value) === 90 ? 90 : 0 })}>
+          <option value={0}>{t('fin.dirAlongX')}</option><option value={90}>{t('fin.dirAlongZ')}</option></select></label>
+      </div>
+      {tile && <div className="grid2">
+        <label className="f"><span>{t('fin.grout')}</span><input type="number" min={0} max={20} step={.5} value={lay.groutMm ?? ''} onChange={e => setLayout({ groutMm: Math.max(0, Math.min(20, Number(e.target.value) || 0)) })} /></label>
+        <label className="f"><span>{t('fin.groutColor')}</span><input type="color" value={lay.groutColor || '#bdb8ae'} onChange={e => { const h = normalizeHex(e.target.value); if (h) setLayout({ groutColor: h }); }} /></label>
+      </div>}
+      {fm && <div className="prov">{t(fm.specs?.sizeCm ? 'fin.piece' : 'fin.pieceTypical', { l: pieceSizeCm(fm)[0], w: pieceSizeCm(fm)[1] })}{fm.specs?.slip ? ` · ${fm.specs.slip}` : ''}{fm.specs?.rectified ? ` · ${t('fin.rectified')}` : ''}</div>}
+    </fieldset>
+
+    <fieldset className="fin-group"><legend>{t('fin.walls')}</legend>
+      <label className="f"><span>{t('editor.wallPaint')}</span><select value={f.wallPaint} onChange={e => onFinish({ wallPaint: e.target.value })}>{by('paint').map(opt)}</select></label>
+      {wet && <label className="f"><span>{t('editor.wallTile')}</span><select value={f.wallTile || ''} onChange={e => onFinish({ wallTile: e.target.value || null })}><option value="">{t('editor.noTile')}</option>{by('wall_tile').map(opt)}</select></label>}
+      {features.map((w, i) => <div key={i} className="fin-row">
+        <div className="grid2">
+          <label className="f"><span>{t('fin.side')}</span><select value={w.side} onChange={e => setFeature(i, { side: e.target.value as WallFeature['side'] })}>
+            {SIDES.map(s => <option key={s} value={s}>{t(`fin.side.${s}`)} · {sideLen(s)}</option>)}</select></label>
+          <label className="f"><span>{t('fin.kind')}</span><select value={w.kind} onChange={e => { const k = e.target.value as WallFeatureKind; setFeature(i, { kind: k, material: firstOf(k) }); }}>
+            {KINDS.filter(k => by(FEATURE_CATEGORY[k]).length).map(k => <option key={k} value={k}>{t(`fin.kind.${k}`)}</option>)}</select></label>
+        </div>
+        <label className="f"><span>{t('fin.product')}</span><select value={w.material} onChange={e => setFeature(i, { material: e.target.value })}>{by(FEATURE_CATEGORY[w.kind]).map(opt)}</select></label>
+        <div className="grid2">
+          {w.kind !== 'rail' && <label className="f"><span>{t('fin.from')}</span><input type="number" min={0} max={fl.ceilingHeight} step={.05} value={w.fromM ?? ''} placeholder="0"
+            onChange={e => setFeature(i, { fromM: e.target.value === '' ? undefined : Math.max(0, Math.min(fl.ceilingHeight - .05, Number(e.target.value) || 0)) })} /></label>}
+          <label className="f"><span>{t(w.kind === 'rail' ? 'fin.railHeight' : 'fin.height')}</span><input type="number" min={.05} max={fl.ceilingHeight} step={.05} value={w.heightM ?? ''} placeholder={t(w.kind === 'rail' ? 'fin.railDefault' : 'fin.fullHeight')}
+            onChange={e => setFeature(i, { heightM: e.target.value === '' ? undefined : Math.max(.05, Math.min(fl.ceilingHeight, Number(e.target.value) || fl.ceilingHeight)) })} /></label>
+          {(w.kind === 'paint' || w.kind === 'panel' || w.kind === 'rail') && <label className="f"><span>{t('fin.color')}</span><input type="color" value={w.color || '#f3f1ec'} onChange={e => { const h = normalizeHex(e.target.value); if (h) setFeature(i, { color: h }); }} /></label>}
+          <button className="btn" style={{ alignSelf: 'end' }} onClick={() => onFinish({ wallFeatures: features.filter((_, k) => k !== i) })}>{t('fin.remove')}</button>
+        </div>
+      </div>)}
+      {features.length < 24 && <button className="btn" onClick={() => onFinish({ wallFeatures: [...features, { side: freeSide ?? 'N', kind: 'wallpaper', material: firstOf('wallpaper'), ...(freeSide ? {} : { fromM: Math.min(fl.ceilingHeight - .3, 1.2) }) }] })}>{t('fin.addFeature')}</button>}
+      {bandsOverlap(features, fl.ceilingHeight) && <div className="issue WARNING">{t('fin.bandsOverlap')}</div>}
+      {room.type !== 'baie' && room.type !== 'bucatarie' && <label className="f"><span>{t('editor.baseboard')}</span><select value={f.baseboard || ''} onChange={e => onFinish({ baseboard: e.target.value || null })}><option value="">{t('editor.noBaseboard')}</option>{by('baseboard').map(opt)}</select></label>}
+    </fieldset>
+
+    <fieldset className="fin-group"><legend>{t('fin.ceiling')}</legend>
+      <label className="f"><span>{t('fin.ceilingType')}</span><select value={c.type} onChange={e => setCeiling({ type: e.target.value as 'flat' | 'drop' | 'cove' })}>
+        {(['flat', 'drop', 'cove'] as const).map(k => <option key={k} value={k}>{t(`fin.ceiling.${k}`)}</option>)}</select></label>
+      {c.type !== 'flat' && <div className="grid2">
+        <label className="f"><span>{t('fin.drop')}</span><input type="number" min={5} max={FINISH_RULES.maxDropCm} value={c.dropCm} onChange={e => setCeiling({ dropCm: Math.max(5, Math.min(FINISH_RULES.maxDropCm, Number(e.target.value) || 10)) })} /></label>
+        {c.type === 'cove' && <label className="f"><span>{t('fin.cove')}</span><input type="number" min={10} max={FINISH_RULES.maxCoveCm} value={c.coveCm} onChange={e => setCeiling({ coveCm: Math.max(10, Math.min(FINISH_RULES.maxCoveCm, Number(e.target.value) || 25)) })} /></label>}
+      </div>}
+      {c.type !== 'flat' && <div className="prov">{t('fin.clearHeight', { h: formatLength(clearHeight(fl, f), units, lang) })}</div>}
+      {c.type === 'cove' && <label className="f"><span>{t('fin.led')}</span><select value={c.led || ''} onChange={e => setCeiling({ led: e.target.value || null })}><option value="">{t('fin.none')}</option>{by('led_strip').map(opt)}</select></label>}
+      <label className="f"><span>{t('fin.cornice')}</span><select value={c.cornice || ''} onChange={e => setCeiling({ cornice: e.target.value || null })}><option value="">{t('fin.none')}</option>{by('cornice').map(opt)}</select></label>
+      <div className="grid2">
+        <label className="f"><span>{t('fin.spots')}</span><select value={c.spot || ''} onChange={e => setCeiling({ spot: e.target.value || null, spots: f.ceiling?.spots ?? 4 })}><option value="">{t('fin.none')}</option>{by('spot').map(opt)}</select></label>
+        {c.spot && <label className="f"><span>{t('fin.spotCount')}</span><input type="number" min={0} max={40} value={c.spots} onChange={e => setCeiling({ spots: Math.max(0, Math.min(40, Math.round(Number(e.target.value) || 0))) })} /></label>}
+      </div>
+    </fieldset>
+
+    <fieldset className="fin-group"><legend>{t('fin.lighting')}</legend>
+      <div className="prov" role="status">{t(light.unknownLumens ? 'light.estimateUnknown' : 'light.estimate', { lux: light.lux, lm: light.lumens })}{light.target ? ` · ${t('light.target', { min: light.target[0], max: light.target[1] })}` : ''}{light.ccts.length ? ` · ${light.ccts.join(' / ')} K` : ''}</div>
+      <div className="grid2">
+        <label className="f"><span>{t('editor.light')}</span><select value={f.light} onChange={e => onFinish({ light: e.target.value })}>{by('lighting').map(opt)}</select></label>
+        <label className="f"><span>{t('editor.lightCount')}</span><input type="number" min={0} max={20} value={f.lights ?? ''} placeholder={t('common.auto')} onChange={e => onFinish({ lights: e.target.value === '' ? undefined : Math.max(0, Math.min(20, Number(e.target.value) || 0)) })} /></label>
+      </div>
+      <div className="prov">{t('fix.title')}</div>
+      {fxIss.map((i, k) => <div key={`fi${k}`} className="issue WARNING">{t(i.key, i.vars)}</div>)}
+      {fxs.map((x, i) => <div key={i} className="band">
+        <div className="grid2">
+          <label className="f"><span>{t('fix.kind')} {i + 1}</span><select value={x.kind} onChange={e => setFx(i, { kind: e.target.value as any, material: null })}>{FIXTURE_KINDS.map(k => <option key={k} value={k}>{t(`fix.kind.${k}`)}</option>)}</select></label>
+          <label className="f"><span>{t('fix.anchor')}</span><select value={x.anchor} onChange={e => setFx(i, { anchor: e.target.value as any })}>{FIXTURE_ANCHORS.map(a => <option key={a} value={a}>{t(`fix.anchor.${a}`)}</option>)}</select></label>
+        </div>
+        <label className="f"><span>{t('fix.product')}</span><select value={x.material || ''} onChange={e => setFx(i, { material: e.target.value || null })}><option value="">{t('fin.none')}</option>{by(...FX_CATS[x.kind]).map(opt)}</select></label>
+        <div className="grid2">
+          <label className="f"><span>{t('fix.count')}</span><input type="number" min={1} max={12} value={x.count ?? ''} placeholder={String(fixtureCount({ ...x, count: undefined } as any))} onChange={e => setFx(i, { count: e.target.value === '' ? undefined : Math.max(1, Math.min(12, Math.round(Number(e.target.value) || 1))) })} /></label>
+          <label className="f"><span>{t('fix.color')}</span><input type="color" value={x.color || '#1c1c1c'} onChange={e => { const h = normalizeHex(e.target.value); if (h) setFx(i, { color: h }); }} /></label>
+        </div>
+        {x.anchor === 'wall' && <label className="f"><span>{t('fix.side')}</span><select value={x.side || 'N'} onChange={e => setFx(i, { side: e.target.value as any })}>{(['N', 'S', 'E', 'W'] as const).map(sd => <option key={sd} value={sd}>{sd}</option>)}</select></label>}
+        <button className="btn" onClick={() => onFinish({ fixtures: fxs.filter((_, k) => k !== i) })}>{t('fix.remove')}</button>
+      </div>)}
+      {fxs.length < 24 && <button className="btn" onClick={() => onFinish({ fixtures: [...fxs, { kind: 'pendant', anchor: snap.placements.some(p => p.roomId === room.id && p.group === 'masa') ? 'table' : 'center' }] })}>{t('fix.add')}</button>}
+    </fieldset>
+    {room.type === 'baie' && <fieldset className="fin-group"><legend>{t('bath.title')}</legend>
+      {bIss.map((i, k) => <div key={k} className="issue WARNING">{t(i.key, i.vars)}</div>)}
+      <div className="grid2">
+        <label className="f"><span>{t('bath.metal')}</span><select value={bs.metal} onChange={e => setB({ metal: e.target.value as any })}>{Object.keys(METAL_COLOR).map(x => <option key={x} value={x}>{t(`bath.metal.${x}`)}</option>)}</select></label>
+        <label className="f"><span>{t('bath.tileZone')}</span><select value={bs.tileZone} onChange={e => setB({ tileZone: e.target.value as any })}>{Object.keys(TILE_ZONE_M).map(x => <option key={x} value={x}>{t(`bath.tileZone.${x}`)}</option>)}</select></label>
+        <label className="f"><span>{t('bath.shower')}</span><select value={bs.showerType} onChange={e => setB({ showerType: e.target.value as any })}>{(['cabin', 'walkin'] as const).map(x => <option key={x} value={x}>{t(`bath.shower.${x}`)}</option>)}</select></label>
+        <label className="f"><span>{t('bath.wc')}</span><select value={bs.wc} onChange={e => setB({ wc: e.target.value as any })}>{(['floor', 'wall'] as const).map(x => <option key={x} value={x}>{t(`bath.wc.${x}`)}</option>)}</select></label>
+      </div>
+      <div className="grid2">
+        <label className="f"><span>{t('bath.tap')}</span><select value={bs.tap || ''} onChange={e => setB({ tap: e.target.value || null })}><option value="">{t('fin.none')}</option>{by('bath_tap').map(opt)}</select></label>
+        <label className="f"><span>{t('bath.showerSet')}</span><select value={bs.shower || ''} onChange={e => setB({ shower: e.target.value || null })}><option value="">{t('fin.none')}</option>{by('shower_set').map(opt)}</select></label>
+        <label className="f"><span>{t('bath.radiator')}</span><select value={bs.towelRadiator || ''} onChange={e => setB({ towelRadiator: e.target.value || null })}><option value="">{t('fin.none')}</option>{by('towel_radiator').map(opt)}</select></label>
+        <label className="f"><span>{t('bath.mirror')}</span><select value={bs.mirror || ''} onChange={e => setB({ mirror: e.target.value || null })}><option value="">{t('fin.none')}</option>{by('led_mirror').map(opt)}</select></label>
+      </div>
+    </fieldset>}
+
+    {run && <fieldset className="fin-group"><legend>{t('kit.title')}</legend>
+      {kIss.map((i, k) => <div key={k} className="issue WARNING">{t(i.key, i.vars)}</div>)}
+      <div className="prov">{t('kit.run', { len: formatLength(run.lengthM, units, lang), n: run.modules, fronts: kq!.fronts })}</div>
+      <div className="grid2">
+        <label className="f"><span>{t('kit.fronts')}</span><input type="color" value={ks.frontColor} onChange={e => { const h = normalizeHex(e.target.value); if (h) setK({ frontColor: h }); }} /></label>
+        <label className="f"><span>{t('kit.finish')}</span><select value={ks.frontFinish} onChange={e => setK({ frontFinish: e.target.value as any })}>{(['matt', 'gloss', 'wood'] as const).map(x => <option key={x} value={x}>{t(`kit.finish.${x}`)}</option>)}</select></label>
+        <label className="f"><span>{t('kit.handle')}</span><select value={ks.handle} onChange={e => setK({ handle: e.target.value as any })}>{(['bar', 'knob', 'profile', 'none'] as const).map(x => <option key={x} value={x}>{t(`kit.handle.${x}`)}</option>)}</select></label>
+        <label className="f"><span>{t('kit.handleColor')}</span><input type="color" value={ks.handleColor} onChange={e => { const h = normalizeHex(e.target.value); if (h) setK({ handleColor: h }); }} /></label>
+        <label className="f"><span>{t('kit.upper')}</span><select value={ks.upper} onChange={e => setK({ upper: e.target.value as any })}>{(['open', 'closed', 'none'] as const).map(x => <option key={x} value={x}>{t(`kit.upper.${x}`)}</option>)}</select></label>
+        <label className="f"><span>{t('kit.backsplash')}</span><select value={ks.backsplash} onChange={e => setK({ backsplash: e.target.value as any })}>{(['tile', 'countertop', 'glass', 'paint'] as const).map(x => <option key={x} value={x}>{t(`kit.backsplash.${x}`)}</option>)}</select></label>
+      </div>
+      {(ks.backsplash === 'glass' || ks.backsplash === 'paint') && <label className="f"><span>{t('kit.backsplashColor')}</span><input type="color" value={ks.backsplashColor || '#e8e6e1'} onChange={e => { const h = normalizeHex(e.target.value); if (h) setK({ backsplashColor: h }); }} /></label>}
+      <label className="f"><span>{t('kit.countertop')}</span><select value={ks.countertop || ''} onChange={e => setK({ countertop: e.target.value || null })}><option value="">{t('kit.customTop')}</option>{by('countertop').map(opt)}</select></label>
+      {!ks.countertop && <div className="grid2">
+        <label className="f"><span>{t('kit.topColor')}</span><input type="color" value={ks.countertopColor} onChange={e => { const h = normalizeHex(e.target.value); if (h) setK({ countertopColor: h }); }} /></label>
+        <label className="f"><span>{t('kit.topMm')}</span><select value={ks.countertopMm} onChange={e => setK({ countertopMm: Number(e.target.value) })}>{[12, 20, 28, 38].map(x => <option key={x} value={x}>{x} mm</option>)}</select></label>
+      </div>}
+      <div className="grid2">
+        <label className="f"><span>{t('kit.sink')}</span><select value={ks.sink || ''} onChange={e => setK({ sink: e.target.value || null })}><option value="">{t('fin.none')}</option>{by('kitchen_sink').map(opt)}</select></label>
+        <label className="f"><span>{t('kit.tap')}</span><select value={ks.tap || ''} onChange={e => setK({ tap: e.target.value || null })}><option value="">{t('fin.none')}</option>{by('kitchen_tap').map(opt)}</select></label>
+      </div>
+      <label className="f"><span>{t('kit.led')}</span><select value={ks.underLed || ''} onChange={e => setK({ underLed: e.target.value || null })}><option value="">{t('fin.none')}</option>{by('led_strip').map(opt)}</select></label>
+    </fieldset>}
+
+    <fieldset className="fin-group"><legend>{t('tex.title')}</legend>
+      {wins.length === 0 && <div className="prov">{t('tex.noWindows')}</div>}
+      {wins.map((w, i) => { const tr = treat(w.openingId), cm = materialOf(mc, tr.curtain ?? tr.sheer), cp = cm ? curtainPlan(w, fl.ceilingHeight, cm, tr.fullness) : null, bm = materialOf(mc, tr.blind), bp = bm ? blindPlan(w, bm) : null;
+        return <div key={w.openingId} className="fin-row">
+          <strong>{t('tex.window', { n: i + 1, w: formatLength(w.widthM, units, lang), side: t(`fin.side.${w.side}`) })}</strong>
+          <div className="grid2">
+            <label className="f"><span>{t('tex.curtain')}</span><select value={tr.curtain || ''} onChange={e => setTreat(w.openingId, { curtain: e.target.value || null })}><option value="">{t('fin.none')}</option>{by('curtain').map(opt)}</select></label>
+            <label className="f"><span>{t('tex.sheer')}</span><select value={tr.sheer || ''} onChange={e => setTreat(w.openingId, { sheer: e.target.value || null })}><option value="">{t('fin.none')}</option>{by('sheer').map(opt)}</select></label>
+          </div>
+          <div className="grid2">
+            <label className="f"><span>{t('tex.fullness')}</span><select value={tr.fullness ?? TEXTILE_RULES.defaultFullness} onChange={e => setTreat(w.openingId, { fullness: Number(e.target.value) })}>
+              {TEXTILE_RULES.fullness.map(x => <option key={x} value={x}>{t(`tex.fullness.${String(x).replace('.', '_')}`)}</option>)}</select></label>
+            <label className="f"><span>{t('tex.blind')}</span><select value={tr.blind || ''} onChange={e => setTreat(w.openingId, { blind: e.target.value || null })}><option value="">{t('fin.none')}</option>{by('blind').map(opt)}</select></label>
+          </div>
+          {cp && <div className="prov">{t('tex.curtainPlan', { rod: formatLength(cp.rodW, units, lang), panels: cp.panels, packs: cp.packs, drop: formatLength(cp.drop, units, lang) })}</div>}
+          {bp && <div className="prov">{t('tex.blindPlan', { n: bp.count, cover: formatLength(bp.coverM, units, lang) })}</div>}
+        </div>; })}
+      <div className="grid2">
+        <label className="f"><span>{t('tex.rug')}</span><select value={f.rug?.material || ''} onChange={e => onFinish({ rug: e.target.value ? { material: e.target.value, ...(f.rug?.rotate ? { rotate: true } : {}) } : null })}><option value="">{t('fin.none')}</option>{by('rug').map(opt)}</select></label>
+        {f.rug && <label className="f"><span>{t('tex.rugRotate')}</span><input type="checkbox" checked={!!f.rug.rotate} onChange={e => onFinish({ rug: { material: f.rug!.material, ...(e.target.checked ? { rotate: true } : {}) } })} /></label>}
+      </div>
+    </fieldset>
+  </div>);
+}
